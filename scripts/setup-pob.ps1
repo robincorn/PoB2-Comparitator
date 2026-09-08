@@ -2,16 +2,18 @@ $ErrorActionPreference = 'Stop'
 
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $PobPath = Join-Path $Root 'pob'
-$LuaDir = Join-Path $Root '.tools\luajit'
+$ToolsPath = Join-Path $Root '.tools'
+$LuaDir = Join-Path $ToolsPath 'luajit'
 $LuaExe = Join-Path $LuaDir 'luajit.exe'
+$VersionFile = Join-Path $ToolsPath 'pob2-commit.txt'
 
 Write-Host '== PoB2 Comparitator setup ==' -ForegroundColor Cyan
 
-# --- Git / PoB2 -------------------------------------------------------------
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw 'Git is required. Install Git for Windows once, then run this script again.'
 }
 
+# --- PoB2 -------------------------------------------------------------------
 if (Test-Path (Join-Path $PobPath '.git')) {
     Write-Host 'Updating PoB2 checkout...' -ForegroundColor Yellow
     git -C $PobPath fetch --depth 1 origin dev
@@ -25,9 +27,14 @@ if (Test-Path (Join-Path $PobPath '.git')) {
 }
 
 $Headless = Join-Path $PobPath 'src\HeadlessWrapper.lua'
-if (-not (Test-Path $Headless)) {
-    throw 'PoB2 checkout is incomplete: src\HeadlessWrapper.lua is missing.'
-}
+$DkJson = Join-Path $PobPath 'runtime\lua\dkjson.lua'
+if (-not (Test-Path $Headless)) { throw 'PoB2 checkout is incomplete: src\HeadlessWrapper.lua is missing.' }
+if (-not (Test-Path $DkJson)) { throw 'PoB2 checkout is incomplete: runtime\lua\dkjson.lua is missing.' }
+
+# Keep the exact dependency revision visible and reproducible.
+$PobCommit = (git -C $PobPath rev-parse HEAD).Trim()
+New-Item -ItemType Directory -Force -Path $ToolsPath | Out-Null
+Set-Content -Path $VersionFile -Value $PobCommit -Encoding ascii
 
 # --- LuaJIT -----------------------------------------------------------------
 # Keep LuaJIT local to this project. We do not modify PATH.
@@ -40,8 +47,6 @@ if (-not (Test-Path $LuaExe)) {
 
     winget install --id DEVCOM.LuaJIT --exact --silent --accept-package-agreements --accept-source-agreements
 
-    # WinGet installs globally. Copy the executable + DLL + Lua support files into
-    # our project-local tools directory so the app is self-contained afterwards.
     $Candidates = @(
         (Join-Path $env:ProgramFiles 'LuaJIT\luajit.exe'),
         (Join-Path ${env:ProgramFiles(x86)} 'LuaJIT\luajit.exe'),
@@ -49,7 +54,8 @@ if (-not (Test-Path $LuaExe)) {
     ) | Where-Object { $_ -and (Test-Path $_) }
 
     if ($Candidates.Count -eq 0) {
-        $Found = Get-ChildItem -Path $env:LOCALAPPDATA,$env:ProgramFiles -Filter luajit.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        $SearchRoots = @($env:LOCALAPPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ -and (Test-Path $_) }
+        $Found = Get-ChildItem -Path $SearchRoots -Filter luajit.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($Found) { $Candidates = @($Found.FullName) }
     }
 
@@ -67,20 +73,20 @@ if (-not (Test-Path $LuaExe)) {
         if (Test-Path $Source) { Copy-Item $Source $LuaDir -Force }
     }
 
-    # Copy the LuaJIT standard Lua/JIT modules if the package ships them.
     foreach ($DirName in @('lua', 'jit')) {
         $SourceDir = Join-Path $LuaRoot $DirName
         if (Test-Path $SourceDir) { Copy-Item $SourceDir $LuaDir -Recurse -Force }
     }
 }
 
-if (-not (Test-Path $LuaExe)) {
-    throw "LuaJIT executable missing: $LuaExe"
-}
+if (-not (Test-Path $LuaExe)) { throw "LuaJIT executable missing: $LuaExe" }
+
+# Basic executable sanity check before the user starts Electron.
+& $LuaExe -v 2>&1 | Select-Object -First 1 | ForEach-Object { Write-Host "LuaJIT: $_" }
 
 Write-Host ''
 Write-Host 'Setup complete.' -ForegroundColor Green
-Write-Host "PoB2:   $PobPath"
-Write-Host "LuaJIT: $LuaExe"
+Write-Host "PoB2 commit: $PobCommit"
+Write-Host "LuaJIT:      $LuaExe"
 Write-Host ''
-Write-Host 'Next: npm install, then npm start.' -ForegroundColor Cyan
+Write-Host 'Next: npm install, then npm run smoke, then npm start.' -ForegroundColor Cyan
