@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const root = path.resolve(__dirname, '..');
 const pobRoot = process.env.POB2_PATH || path.join(root, 'pob');
 const pobSrc = path.join(pobRoot, 'src');
+const pobRuntimeLua = path.join(pobRoot, 'runtime', 'lua');
 const bridgeScript = path.join(root, 'pob-bridge', 'OverlayWrapper.lua');
 const luaJit = process.env.LUAJIT || path.join(root, '.tools', 'luajit', 'luajit.exe');
 
@@ -15,6 +16,7 @@ function fail(message) {
 
 for (const required of [
   path.join(pobSrc, 'HeadlessWrapper.lua'),
+  path.join(pobRuntimeLua, 'dkjson.lua'),
   bridgeScript,
   luaJit,
 ]) {
@@ -23,9 +25,6 @@ for (const required of [
 
 if (process.exitCode) process.exit();
 
-// dkjson is supplied by PoB2 under its runtime/lua directory on the checkout
-// used by current PoB2 builds. The bridge inherits PoB2's own Lua path setup,
-// so the smoke test should not hard-code a dkjson location here.
 const env = { ...process.env };
 
 env.LUA_PATH = [
