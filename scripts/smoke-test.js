@@ -44,34 +44,33 @@ const child = spawn(luaJit, [bridgeScript], {
 });
 
 let buffer = '';
-let finished = false;
+let responseReceived = false;
+let childExited = false;
 const timeout = setTimeout(() => {
-  if (!finished) {
+  if (!responseReceived) {
     child.kill();
-    fail('Bridge did not answer within 15 seconds');
+    fail('Bridge did not answer within 15 seconds. Check [PoB stdout]/[PoB stderr] above for the last startup message.');
   }
 }, 15000);
 
-child.stderr.on('data', (chunk) => process.stderr.write(`[PoB] ${chunk}`));
 child.stdout.on('data', (chunk) => {
   buffer += chunk.toString();
   const lines = buffer.split('\n');
   buffer = lines.pop();
   for (const line of lines) {
-    if (!line.trim()) continue;
+    const trimmed = line.trim();
+    if (!trimmed) continue;
 
     let response;
     try {
-      response = JSON.parse(line);
+      response = JSON.parse(trimmed);
     } catch {
-      // PoB itself writes startup/progress messages to stdout. They are not
-      // bridge responses and must not make an otherwise valid smoke test fail.
-      process.stdout.write(`[PoB stdout] ${line}\n`);
+      process.stdout.write(`[PoB stdout] ${trimmed}\n`);
       continue;
     }
 
     if (response.id !== 1) continue;
-    finished = true;
+    responseReceived = true;
     clearTimeout(timeout);
 
     if (!response.ok) {
@@ -86,17 +85,18 @@ child.stdout.on('data', (chunk) => {
   }
 });
 
+child.stderr.on('data', (chunk) => process.stderr.write(`[PoB stderr] ${chunk}`));
 child.on('error', (error) => {
-  if (!finished) {
+  if (!responseReceived) {
     clearTimeout(timeout);
     fail(`Could not start LuaJIT: ${error.message}`);
   }
 });
-
-child.on('exit', () => {
-  if (!finished && process.exitCode === undefined) {
+child.on('exit', (code, signal) => {
+  childExited = true;
+  if (!responseReceived) {
     clearTimeout(timeout);
-    fail('Bridge exited before answering');
+    fail(`Bridge exited before answering (code=${code}, signal=${signal || 'none'})`);
   }
 });
 
