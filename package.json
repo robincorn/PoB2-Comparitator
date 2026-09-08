@@ -5,6 +5,7 @@
   "description": "Minimal PoB2 comparison overlay proof of concept",
   "main": "src/main.js",
   "scripts": {
+    "setup": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/setup-pob.ps1",
     "start": "electron ."
   },
   "devDependencies": {
