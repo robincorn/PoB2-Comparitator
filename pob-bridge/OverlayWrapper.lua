@@ -81,53 +81,59 @@ local function skillStats()
   end
 
   for groupIndex, group in ipairs(build.skillsTab.socketGroupList or {}) do
-    local skillList = group.displaySkillList or {}
-    for skillIndex, activeSkill in ipairs(skillList) do
-      local grantedEffect = activeSkill.activeEffect and activeSkill.activeEffect.grantedEffect
-      if grantedEffect then
-        local name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill"
-        local dpsEntry = takeSkillDps(skillDpsMap, name, usedDpsEntries)
+    -- PoB2 marks groups belonging to the inactive weapon set with slotEnabled=false.
+    -- The normal calculation setup uses this flag when building its skill lists;
+    -- including those groups here was the reason weapon-set skills were duplicated.
+    local groupVisible = group.slotEnabled and (group.enabled or groupIndex == build.mainSocketGroup)
+    if groupVisible then
+      local skillList = group.displaySkillList or {}
+      for skillIndex, activeSkill in ipairs(skillList) do
+        local grantedEffect = activeSkill.activeEffect and activeSkill.activeEffect.grantedEffect
+        if grantedEffect then
+          local name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill"
+          local dpsEntry = takeSkillDps(skillDpsMap, name, usedDpsEntries)
 
-        -- Select the skill only to obtain its normal PoB2 detail output such as
-        -- AverageDamage. The DPS value itself comes from SkillDPS above.
-        build.mainSocketGroup = groupIndex
-        calcsTab.input.skill_number = groupIndex
-        group.mainActiveSkill = skillIndex
-        group.mainActiveSkillCalcs = skillIndex
-        build.buildFlag = true
-        runCallback("OnFrame")
+          -- Select the skill only to obtain its normal PoB2 detail output such as
+          -- AverageDamage. The DPS value itself comes from SkillDPS above.
+          build.mainSocketGroup = groupIndex
+          calcsTab.input.skill_number = groupIndex
+          group.mainActiveSkill = skillIndex
+          group.mainActiveSkillCalcs = skillIndex
+          build.buildFlag = true
+          runCallback("OnFrame")
 
-        local output = calcsTab.mainOutput or {}
-        table.insert(result, {
-          name = name,
-          group = groupIndex,
-          skillIndex = skillIndex,
-          support = false,
-          fullDPS = dpsEntry and dpsEntry.dps or 0,
-          combinedDPS = dpsEntry and dpsEntry.dps or 0,
-          hitDPS = output.TotalDPS or 0,
-          averageDamage = output.AverageDamage or 0,
-          speed = output.Speed,
-          dotDPS = output.TotalDotDPS or output.TotalDot or 0,
-          count = dpsEntry and dpsEntry.count or 1,
-          trigger = dpsEntry and dpsEntry.trigger or nil,
-          source = dpsEntry and dpsEntry.source or nil
-        })
+          local output = calcsTab.mainOutput or {}
+          table.insert(result, {
+            name = name,
+            group = groupIndex,
+            skillIndex = skillIndex,
+            support = false,
+            fullDPS = dpsEntry and dpsEntry.dps or 0,
+            combinedDPS = dpsEntry and dpsEntry.dps or 0,
+            hitDPS = output.TotalDPS or 0,
+            averageDamage = output.AverageDamage or 0,
+            speed = output.Speed,
+            dotDPS = output.TotalDotDPS or output.TotalDot or 0,
+            count = dpsEntry and dpsEntry.count or 1,
+            trigger = dpsEntry and dpsEntry.trigger or nil,
+            source = dpsEntry and dpsEntry.source or nil
+          })
+        end
       end
-    end
 
-    for _, gem in ipairs(group.gemList or {}) do
-      if gem.support then
-        table.insert(result, {
-          name = gem.nameSpec or (gem.grantedEffect and gem.grantedEffect.name) or "Support Gem",
-          group = groupIndex,
-          support = true,
-          fullDPS = 0,
-          combinedDPS = 0,
-          hitDPS = 0,
-          averageDamage = 0,
-          dotDPS = 0
-        })
+      for _, gem in ipairs(group.gemList or {}) do
+        if gem.support then
+          table.insert(result, {
+            name = gem.nameSpec or (gem.grantedEffect and gem.grantedEffect.name) or "Support Gem",
+            group = groupIndex,
+            support = true,
+            fullDPS = 0,
+            combinedDPS = 0,
+            hitDPS = 0,
+            averageDamage = 0,
+            dotDPS = 0
+          })
+        end
       end
     end
   end
