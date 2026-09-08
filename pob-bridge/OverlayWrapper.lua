@@ -46,16 +46,6 @@ local function stats()
   }
 end
 
-local function importShareCode(code, name)
-  assert(type(code) == "string" and #code > 0, "params.code is required")
-  -- This mirrors PoB2's ImportTab.lua build-code path:
-  -- URL-safe base64 -> base64 decode -> Inflate -> XML -> existing loader.
-  local xmlText = Inflate(common.base64.decode(code:gsub("-", "+"):gsub("_", "/")))
-  assert(type(xmlText) == "string" and #xmlText > 0, "Invalid PoB2 share code")
-  loadBuildFromXML(xmlText, name or "Imported Build")
-  return stats()
-end
-
 local function dispatch(request)
   if request.method == "getStatus" then
     return {
@@ -68,9 +58,6 @@ local function dispatch(request)
     assert(type(request.params.xml) == "string", "params.xml is required")
     loadBuildFromXML(request.params.xml, request.params.name or "Overlay Build")
     return stats()
-  elseif request.method == "loadShareCode" then
-    assert(type(request.params) == "table", "params is required")
-    return importShareCode(request.params.code, request.params.name)
   elseif request.method == "getStats" then
     runCallback("OnFrame")
     return stats()
