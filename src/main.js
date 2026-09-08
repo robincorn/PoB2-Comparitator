@@ -1,20 +1,46 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, globalShortcut, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { decodeShareCode } = require('./pob-code');
 
 let mainWindow;
+let tray;
 let bridge;
+let isQuitting = false;
 let requestId = 0;
 const pending = new Map();
 const BRIDGE_TIMEOUT_MS = 30000;
 const TOGGLE_HOTKEY = 'CommandOrControl+Shift+Space';
 
+function createTrayIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="7" fill="#17171d" stroke="#777"/><path d="M8 24 L13 8 H17 L22 24 H18.5 L17.3 20 H12.7 L11.5 24 Z M13.6 17 H16.4 L15 12.2 Z" fill="#eee"/></svg>`;
+  return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
+}
+
 function toggleOverlay() {
   if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
   if (mainWindow.isVisible()) mainWindow.hide();
   else mainWindow.showInactive();
+}
+
+function showOverlay() {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.showInactive();
+}
+
+function createTray() {
+  tray = new Tray(createTrayIcon());
+  tray.setToolTip('PoB2 Comparitator');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Show / Hide Overlay', click: toggleOverlay },
+    { type: 'separator' },
+    { label: 'Quit PoB2 Comparitator', click: () => { isQuitting = true; app.quit(); } },
+  ]));
+  tray.on('click', toggleOverlay);
+  tray.on('double-click', showOverlay);
 }
 
 function createWindow() {
@@ -37,6 +63,12 @@ function createWindow() {
   });
   mainWindow.setAlwaysOnTop(true, 'floating');
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -56,32 +88,16 @@ function startBridge() {
   const bridgeScript = path.join(projectRoot, 'pob-bridge', 'OverlayWrapper.lua');
   const luajit = findLuaJit(projectRoot);
 
-  if (!fs.existsSync(path.join(pobSrc, 'HeadlessWrapper.lua'))) {
-    return { ok: false, error: `PoB2 not found at ${pobRoot}. Run npm run setup first.` };
-  }
-  if (!fs.existsSync(path.join(pobRuntimeLua, 'dkjson.lua'))) {
-    return { ok: false, error: `PoB2 runtime Lua directory not found at ${pobRuntimeLua}.` };
-  }
+  if (!fs.existsSync(path.join(pobSrc, 'HeadlessWrapper.lua'))) return { ok: false, error: `PoB2 not found at ${pobRoot}. Run npm run setup first.` };
+  if (!fs.existsSync(path.join(pobRuntimeLua, 'dkjson.lua'))) return { ok: false, error: `PoB2 runtime Lua directory not found at ${pobRuntimeLua}.` };
 
   const env = {
     ...process.env,
-    LUA_PATH: [
-      path.join(pobRuntimeLua, '?.lua'),
-      path.join(pobRuntimeLua, '?', 'init.lua'),
-      path.join(pobSrc, '?.lua'),
-      path.join(pobSrc, '?', 'init.lua'),
-      process.env.LUA_PATH || '',
-    ].filter(Boolean).join(';'),
+    LUA_PATH: [path.join(pobRuntimeLua, '?.lua'), path.join(pobRuntimeLua, '?', 'init.lua'), path.join(pobSrc, '?.lua'), path.join(pobSrc, '?', 'init.lua'), process.env.LUA_PATH || ''].filter(Boolean).join(';'),
     LUA_CPATH: [path.join(pobRuntime, '?.dll'), process.env.LUA_CPATH || ''].filter(Boolean).join(';'),
   };
 
-  bridge = spawn(luajit, [bridgeScript], {
-    cwd: pobSrc,
-    env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true,
-  });
-
+  bridge = spawn(luajit, [bridgeScript], { cwd: pobSrc, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   let buffer = '';
   bridge.stdout.on('data', (chunk) => {
     buffer += chunk.toString();
@@ -97,9 +113,7 @@ function startBridge() {
           clearTimeout(entry.timer);
           entry.resolve(message);
         }
-      } catch (err) {
-        console.error('Invalid bridge output:', line, err);
-      }
+      } catch (err) { console.error('Invalid bridge output:', line, err); }
     }
   });
   bridge.stderr.on('data', (chunk) => console.error('[PoB]', chunk.toString()));
@@ -150,17 +164,10 @@ ipcMain.handle('bridge-status', async () => {
   return callBridge('getStatus');
 });
 
-ipcMain.handle('hide-overlay', () => {
-  mainWindow?.hide();
-  return { ok: true };
-});
+ipcMain.handle('hide-overlay', () => { mainWindow?.hide(); return { ok: true }; });
 
 ipcMain.handle('select-build', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Select a Path of Building XML build',
-    properties: ['openFile'],
-    filters: [{ name: 'Path of Building', extensions: ['xml'] }],
-  });
+  const result = await dialog.showOpenDialog(mainWindow, { title: 'Select a Path of Building XML build', properties: ['openFile'], filters: [{ name: 'Path of Building', extensions: ['xml'] }] });
   if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true };
   const buildPath = result.filePaths[0];
   const xml = fs.readFileSync(buildPath, 'utf8');
@@ -172,11 +179,8 @@ ipcMain.handle('load-clipboard-build', async () => {
   const code = clipboard.readText().trim();
   if (!code) return { ok: false, error: 'Clipboard is empty.' };
   let xml;
-  try {
-    xml = decodeShareCode(code);
-  } catch (error) {
-    return { ok: false, error: error.message };
-  }
+  try { xml = decodeShareCode(code); }
+  catch (error) { return { ok: false, error: error.message }; }
   const response = await loadXml(xml, 'Clipboard Build');
   return { ...response, stats: response.result };
 });
@@ -187,15 +191,19 @@ ipcMain.handle('calculate', async () => {
 });
 
 app.whenReady().then(() => {
+  createTray();
   createWindow();
-  if (!globalShortcut.register(TOGGLE_HOTKEY, toggleOverlay)) {
-    console.error(`Failed to register overlay hotkey: ${TOGGLE_HOTKEY}`);
-  }
+  if (!globalShortcut.register(TOGGLE_HOTKEY, toggleOverlay)) console.error(`Failed to register overlay hotkey: ${TOGGLE_HOTKEY}`);
 });
 
 app.on('will-quit', () => {
+  isQuitting = true;
   globalShortcut.unregisterAll();
+  tray?.destroy();
   bridge?.kill();
 });
 
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => {
+  if (!isQuitting) return;
+  app.quit();
+});
