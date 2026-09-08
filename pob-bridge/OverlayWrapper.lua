@@ -1,13 +1,21 @@
 -- Thin JSONL RPC bridge around PoB2's existing HeadlessWrapper.
 -- This file intentionally contains no calculation logic of its own.
 
+-- Keep diagnostic output away from stdout: stdout is our JSONL transport.
+local nativePrint = print
+local function log(...)
+  io.stderr:write(table.concat({ ... }, "\t") .. "\n")
+  io.stderr:flush()
+end
+print = log
+
 dofile("HeadlessWrapper.lua")
 local dkjson = require "dkjson"
 
 local function response(id, ok, result, err)
   local out = { id = id, ok = ok }
   if ok then out.result = result else out.error = err end
-  print(dkjson.encode(out))
+  nativePrint(dkjson.encode(out))
   io.stdout:flush()
 end
 
