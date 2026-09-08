@@ -185,7 +185,7 @@ function renderPoeStatus(info) {
   poeConnect.textContent = info.connected ? 'Disconnect Account' : 'Connect Account';
   if (info.stats) {
     renderStats(info.stats);
-    renderSkills(info.stats ? undefined : undefined);
+    renderSkills(info.skills || []);
   }
   if (info.character) {
     file.textContent = `${info.character.name} · ${info.character.league || 'Unknown league'}`;
