@@ -18,63 +18,38 @@ real PoB2 calculations
 
 PoB2 remains the calculation authority. The overlay does not reimplement PoB calculations.
 
-## Automatic character workflow
+## Character workflow via local PoB2
 
-The preferred workflow is now Character Sync:
+The current preferred workflow deliberately does **not** require our own Path of Exile OAuth application. Instead, the user's installed PoB2 handles character authentication and import:
 
 ```text
-Path of Exile account
-  ↓ OAuth 2.1 + PKCE
-PoE character API
-  ↓ character JSON
-PoB2 import functions
+Path of Exile
+  ↓ existing PoB2 character import / login
+Installed PoB2
+  ↓ Save build
+local PoB2 XML
+  ↓ file watcher
+PoB2 Comparitator
   ↓
-PoB2 calculation
+our bundled PoB2 headless engine
   ↓
 Overlay
 ```
 
-On first use:
+Use `Sync via PoB2` in the overlay:
 
-1. Click `Connect Account`.
-2. Authorize the app on the Path of Exile website.
-3. Select a character.
-4. The character, equipment, skills, passive tree and jewels are imported through PoB2.
-5. The successful character snapshot is stored locally.
+1. Comparitator launches the installed PoB2 application.
+2. Import the character normally inside PoB2.
+3. Save the build with `Ctrl+S`.
+4. Comparitator detects the newly created or modified XML build and loads it automatically.
 
-After that, startup loads the last successful snapshot immediately and attempts a fresh API sync in the background. If the API is unavailable, the cached build remains usable.
+PoB2's documented user-data directory for the PoE2 build is `Documents/Path of Building (PoE2)/`, with builds stored below its `Builds` directory. The app also checks common legacy/installed locations. The local executable can be overridden with `POB_INSTALLED_PATH` if automatic detection does not find it.
 
-OAuth tokens are stored using Electron `safeStorage` on Windows. Passwords and POESESSID values are never collected or stored.
+This integration intentionally does not read or reuse PoB2's OAuth tokens. PoB2 remains responsible for authentication.
 
-### OAuth client
+## OAuth status
 
-The application **does not use Path of Building's OAuth client id**. It requires our own registered Path of Exile **Public Client**.
-
-Set the client id outside the source tree:
-
-```powershell
-$env:POE_CLIENT_ID = "our-registered-client-id"
-$env:POE_CONTACT = "our-contact-address"
-npm start
-```
-
-The registered redirect URI must be:
-
-```text
-http://127.0.0.1:47831/callback
-```
-
-GGG requires executable applications that use the API to use a public OAuth client. Public clients must use Authorization Code + PKCE and a local redirect URI. GGG also requires an identifiable OAuth User-Agent and says application credentials must not be embedded in distributed binaries.
-
-Registration is handled by GGG. Their current documentation asks developers to request OAuth access by emailing `oauth@grindinggear.com` with the account name/discriminator, application name, client type, grant types, scopes and redirect URI.
-
-The app deliberately requests only the scope required for character synchronization:
-
-- `account:characters` — retrieve the selected PoE2 character and its build data
-
-No profile, league, trade, stash, or service scopes are required by the current implementation.
-
-The PoB client id is not accepted as a fallback. If `POE_CLIENT_ID` is missing, Character Sync fails with a configuration error instead of silently using PoB credentials.
+Our own OAuth implementation is currently parked because GGG is not registering new applications at this point in time. The source files remain available as a future backend, but the UI and normal workflow do not depend on them.
 
 ## Standalone PoB2 engine
 
@@ -112,23 +87,16 @@ npm start
 
 - `Ctrl + Shift + Space` — show/hide overlay
 - `Ctrl + Shift + C` — compare the item currently in the clipboard
+- `Sync via PoB2` — launch local PoB2 and wait for a saved build
 - `Load XML Build` — manual fallback
 - `Load PoB2 Clipboard` — manual share-code fallback
 - `Recalculate` — force a PoB2 recalculation
-- Character Sync — preferred build loading path
 
 Item copying remains manual: copy an item in PoE, then press the comparison hotkey. The app does not synthesize game input or watch the clipboard continuously.
 
-## Persistence
+## Skills overview
 
-Stored under the Electron application data directory rather than the repository:
-
-- encrypted OAuth token data
-- selected character metadata
-- last successful character snapshot
-- last successful sync timestamp
-
-The snapshot allows the overlay to remain useful while offline or while the API is temporarily unavailable.
+The overview consumes the skill data exposed by PoB2 and now displays all returned active skills instead of truncating the list to the first six entries. This keeps the overview aligned with PoB2's Skills tab rather than silently hiding lower-DPS skills.
 
 ## Smoke test
 
