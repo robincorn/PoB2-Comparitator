@@ -164,13 +164,18 @@ ipcMain.handle('bridge-status', async () => {
 
 ipcMain.handle('hide-overlay', () => { mainWindow?.hide(); return { ok: true }; });
 
+function withStats(response) {
+  if (!response?.ok) return response;
+  return { ...response, stats: response.result?.stats, skills: response.result?.skills || [] };
+}
+
 ipcMain.handle('select-build', async () => {
   const result = await dialog.showOpenDialog(mainWindow, { title: 'Select a Path of Building XML build', properties: ['openFile'], filters: [{ name: 'Path of Building', extensions: ['xml'] }] });
   if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true };
   const buildPath = result.filePaths[0];
   const xml = fs.readFileSync(buildPath, 'utf8');
-  const response = await loadXml(xml, path.basename(buildPath, '.xml'));
-  return { ...response, file: buildPath, stats: response.result };
+  const response = withStats(await loadXml(xml, path.basename(buildPath, '.xml')));
+  return { ...response, file: buildPath };
 });
 
 ipcMain.handle('load-clipboard-build', async () => {
@@ -179,8 +184,8 @@ ipcMain.handle('load-clipboard-build', async () => {
   let xml;
   try { xml = decodeShareCode(code); }
   catch (error) { return { ok: false, error: error.message }; }
-  const response = await loadXml(xml, 'Clipboard Build');
-  return { ...response, stats: response.result };
+  const response = withStats(await loadXml(xml, 'Clipboard Build'));
+  return response;
 });
 
 ipcMain.handle('compare-clipboard-item', async () => {
@@ -192,8 +197,8 @@ ipcMain.handle('compare-clipboard-item', async () => {
 });
 
 ipcMain.handle('calculate', async () => {
-  const response = await callBridge('getStats');
-  return { ...response, stats: response.result };
+  const response = withStats(await callBridge('getStats'));
+  return response;
 });
 
 app.whenReady().then(() => {
