@@ -3,6 +3,30 @@ const output = document.getElementById('output');
 const file = document.getElementById('file');
 const calculate = document.getElementById('calculate');
 
+const statLabels = {
+  life: 'Life',
+  mana: 'Mana',
+  energyShield: 'Energy Shield',
+  armour: 'Armour',
+  evasion: 'Evasion',
+  totalDPS: 'Total DPS',
+  averageDamage: 'Average Damage',
+};
+
+function formatStat(value) {
+  if (value === undefined || value === null) return '—';
+  if (typeof value !== 'number') return String(value);
+  return Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function renderStats(stats) {
+  if (!stats) return;
+  for (const key of Object.keys(statLabels)) {
+    const element = document.querySelector(`[data-stat="${key}"]`);
+    if (element) element.textContent = formatStat(stats[key]);
+  }
+}
+
 function showResult(result) {
   if (!result?.ok) {
     status.textContent = `Error: ${result?.error || 'Unknown error'}`;
@@ -11,7 +35,7 @@ function showResult(result) {
   }
   status.textContent = 'PoB2 connected';
   status.className = 'status ok';
-  if (result.stats) output.textContent = JSON.stringify(result.stats, null, 2);
+  if (result.stats) renderStats(result.stats);
 }
 
 function buildLoaded(result, label) {
@@ -19,11 +43,12 @@ function buildLoaded(result, label) {
   if (result.ok) {
     file.textContent = label;
     calculate.disabled = false;
-    output.textContent = 'Build loaded. Press Calculate Stats.';
+    if (result.stats) renderStats(result.stats);
   }
 }
 
-document.getElementById('close').onclick = () => window.close();
+document.getElementById('close').onclick = () => window.pob.hideOverlay();
+
 document.getElementById('paste').onclick = async () => {
   const result = await window.pob.loadClipboardBuild();
   buildLoaded(result, 'Build loaded from clipboard');
@@ -35,7 +60,16 @@ document.getElementById('load').onclick = async () => {
   buildLoaded(result, result.file || 'Build loaded');
 };
 
-calculate.onclick = async () => showResult(await window.pob.calculate());
+calculate.onclick = async () => {
+  calculate.disabled = true;
+  calculate.textContent = 'Calculating…';
+  try {
+    showResult(await window.pob.calculate());
+  } finally {
+    calculate.disabled = false;
+    calculate.textContent = 'Recalculate';
+  }
+};
 
 window.pob.onBridgeStatus(showResult);
 window.pob.status().then(showResult);
