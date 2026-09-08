@@ -46,7 +46,35 @@ After that, startup loads the last successful snapshot immediately and attempts 
 
 OAuth tokens are stored using Electron `safeStorage` on Windows. Passwords and POESESSID values are never collected or stored.
 
-The OAuth implementation follows the same PoE API contract used by current PoB2. The prototype defaults to PoB2's public OAuth client id (`pob`); before distributing the application, register/use the appropriate client id and provide it with `POE_CLIENT_ID` rather than shipping credentials in the app.
+### OAuth client
+
+The application **does not use Path of Building's OAuth client id**. It requires our own registered Path of Exile **Public Client**.
+
+Set the client id outside the source tree:
+
+```powershell
+$env:POE_CLIENT_ID = "our-registered-client-id"
+$env:POE_CONTACT = "our-contact-address"
+npm start
+```
+
+The registered redirect URI must be:
+
+```text
+http://127.0.0.1:47831/callback
+```
+
+GGG requires executable applications that use the API to use a public OAuth client. Public clients must use Authorization Code + PKCE and a local redirect URI. GGG also requires an identifiable OAuth User-Agent and says application credentials must not be embedded in distributed binaries. citeturn1search0turn1search1
+
+Registration is handled by GGG. Their current documentation asks developers to request OAuth access by emailing `oauth@grindinggear.com` with the account name/discriminator, application name, client type, grant types, scopes and redirect URI. citeturn1search1
+
+Required scopes for this app are deliberately limited to:
+
+- `account:profile` — identify the connected account
+- `account:leagues` — resolve league information
+- `account:characters` — retrieve the selected PoE2 character
+
+The PoB client id is not accepted as a fallback. If `POE_CLIENT_ID` is missing, Character Sync fails with a configuration error instead of silently using PoB credentials.
 
 ## Standalone PoB2 engine
 
@@ -54,7 +82,7 @@ The project bootstraps its own local PoB2 + LuaJIT runtime. The calculator is no
 
 `npm start` automatically runs the PoB2 setup if the local engine is missing.
 
-The setup script pins PoB2 to a known-good commit so an upstream change cannot silently alter calculation behavior. To deliberately test another PoB2 revision, set `POB2_COMMIT` before running setup.
+The setup script pins PoB2 to a known-good commit so an upstream change cannot silently alter calculation behavior. To deliberately test another PoB2 revision, set `POB2_COMMIT` before setup.
 
 The local `pob/` and `.tools/` directories are ignored by Git and can be recreated at any time.
 
@@ -109,3 +137,7 @@ npm run smoke
 ```
 
 The smoke test starts the real LuaJIT + PoB2 headless bridge and verifies the JSONL calculation path. This keeps PoB/bridge failures separate from Electron UI failures.
+
+## Third-party notice
+
+This product isn't affiliated with or endorsed by Grinding Gear Games in any way.
