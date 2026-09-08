@@ -7,7 +7,7 @@ let mainWindow;
 let bridge;
 let requestId = 0;
 const pending = new Map();
-const BRIDGE_TIMEOUT_MS = 15000;
+const BRIDGE_TIMEOUT_MS = 30000;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -53,12 +53,11 @@ function startBridge() {
 
   const env = {
     ...process.env,
-    // PoB2 is started with cwd=<pob>\src. Its Lua modules live one directory
-    // above src in <pob>\runtime\lua, so use absolute paths to avoid cwd/path
-    // assumptions in future changes.
     LUA_PATH: [
       path.join(pobRuntimeLua, '?.lua'),
       path.join(pobRuntimeLua, '?', 'init.lua'),
+      path.join(pobSrc, '?.lua'),
+      path.join(pobSrc, '?', 'init.lua'),
       process.env.LUA_PATH || '',
     ].filter(Boolean).join(';'),
     LUA_CPATH: [
@@ -86,7 +85,7 @@ function startBridge() {
         const resolve = pending.get(message.id);
         if (resolve) {
           pending.delete(message.id);
-          resolve.timer && clearTimeout(resolve.timer);
+          if (resolve.timer) clearTimeout(resolve.timer);
           resolve(message);
         }
       } catch (err) {
@@ -121,8 +120,7 @@ function callBridge(method, params = {}) {
       pending.delete(id);
       resolve({ ok: false, error: `PoB bridge timed out (${method})` });
     }, BRIDGE_TIMEOUT_MS);
-    resolve.timer = timer;
-    pending.set(id, resolve);
+    pending.set(id, { resolve, timer });
     bridge.stdin.write(JSON.stringify({ id, method, params }) + '\n');
   });
 }
