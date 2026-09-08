@@ -26,7 +26,7 @@ try { xml = decodeShareCode(shareCode); console.log(`SHARE CODE DECODE PASSED: $
 catch (error) { fail(error.message); process.exit(); }
 
 const env = { ...process.env };
-env.LUA_PATH = [path.join(pobRuntimeLua, '?.lua'), path.join(pobRuntimeLua, '?', 'init.lua'), env.LUA_PATH || ''].filter(Boolean).join(';');
+env.LUA_PATH = [path.join(pobRuntimeLua, '?.lua'), path.join(pobRuntimeLua, '?', 'init.lua'), path.join(pobSrc, '?.lua'), path.join(pobSrc, '?', 'init.lua'), env.LUA_PATH || ''].filter(Boolean).join(';');
 env.LUA_CPATH = [path.join(pobRoot, 'runtime', '?.dll'), env.LUA_CPATH || ''].filter(Boolean).join(';');
 
 const child = spawn(luaJit, [bridgeScript], { cwd: pobSrc, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
@@ -86,9 +86,9 @@ child.stdout.on('data', (chunk) => {
     }
     if (method === 'compareItem') {
       const result = response.result;
-      if (!result?.itemName || !result?.slot || !validateStats(result.base, 'Item comparison base') || !validateStats(result.changed, 'Item comparison changed')) { clearTimeout(timeout); child.kill(); return; }
-      if (typeof result.delta?.effectiveHitPool !== 'number' || typeof result.delta?.effectiveMaxHit !== 'number') { clearTimeout(timeout); child.kill(); fail(`Item comparison returned invalid defense deltas: ${JSON.stringify(result)}`); return; }
-      console.log(`ITEM COMPARISON PASSED: ${result.itemName} in ${result.slot}; delta=${JSON.stringify(result.delta)}`);
+      if (!result?.itemName || !result?.slot || !validateStats(result.base?.stats, 'Item comparison base') || !validateStats(result.changed?.stats, 'Item comparison changed')) { clearTimeout(timeout); child.kill(); return; }
+      if (typeof result.delta?.effectiveHitPool !== 'number' || typeof result.delta?.effectiveMaxHit !== 'number' || !Array.isArray(result.delta?.skills)) { clearTimeout(timeout); child.kill(); fail(`Item comparison returned invalid deltas: ${JSON.stringify(result)}`); return; }
+      console.log(`ITEM COMPARISON PASSED: ${result.itemName} in ${result.slot}; defenseDelta=${JSON.stringify({ effectiveHitPool: result.delta.effectiveHitPool, effectiveMaxHit: result.delta.effectiveMaxHit })}; skillDeltas=${result.delta.skills.length}`);
       responseReceived = true;
       clearTimeout(timeout);
       console.log('SMOKE TEST PASSED: PoB2 startup + share-code decode + build import + skill DPS + effective defenses + item comparison are working.');
