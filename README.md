@@ -64,15 +64,15 @@ The registered redirect URI must be:
 http://127.0.0.1:47831/callback
 ```
 
-GGG requires executable applications that use the API to use a public OAuth client. Public clients must use Authorization Code + PKCE and a local redirect URI. GGG also requires an identifiable OAuth User-Agent and says application credentials must not be embedded in distributed binaries. citeturn1search0turn1search1
+GGG requires executable applications that use the API to use a public OAuth client. Public clients must use Authorization Code + PKCE and a local redirect URI. GGG also requires an identifiable OAuth User-Agent and says application credentials must not be embedded in distributed binaries.
 
-Registration is handled by GGG. Their current documentation asks developers to request OAuth access by emailing `oauth@grindinggear.com` with the account name/discriminator, application name, client type, grant types, scopes and redirect URI. citeturn1search1
+Registration is handled by GGG. Their current documentation asks developers to request OAuth access by emailing `oauth@grindinggear.com` with the account name/discriminator, application name, client type, grant types, scopes and redirect URI.
 
-Required scopes for this app are deliberately limited to:
+The app deliberately requests only the scope required for character synchronization:
 
-- `account:profile` — identify the connected account
-- `account:leagues` — resolve league information
-- `account:characters` — retrieve the selected PoE2 character
+- `account:characters` — retrieve the selected PoE2 character and its build data
+
+No profile, league, trade, stash, or service scopes are required by the current implementation.
 
 The PoB client id is not accepted as a fallback. If `POE_CLIENT_ID` is missing, Character Sync fails with a configuration error instead of silently using PoB credentials.
 
