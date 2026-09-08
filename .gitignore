@@ -2,3 +2,4 @@ node_modules/
 pob/
 .tools/
 dist/
+test-fixtures/test-build.txt
