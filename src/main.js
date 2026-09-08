@@ -7,6 +7,7 @@ let mainWindow;
 let bridge;
 let requestId = 0;
 const pending = new Map();
+const BRIDGE_TIMEOUT_MS = 15000;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -42,7 +43,7 @@ function startBridge() {
   const luajit = findLuaJit(projectRoot);
 
   if (!fs.existsSync(path.join(pobSrc, 'HeadlessWrapper.lua'))) {
-    return { ok: false, error: `PoB2 not found at ${pobRoot}. Run setup-pob.cmd first.` };
+    return { ok: false, error: `PoB2 not found at ${pobRoot}. Run npm run setup first.` };
   }
 
   const env = {
@@ -70,6 +71,7 @@ function startBridge() {
         const resolve = pending.get(message.id);
         if (resolve) {
           pending.delete(message.id);
+          resolve.timer && clearTimeout(resolve.timer);
           resolve(message);
         }
       } catch (err) {
@@ -78,25 +80,33 @@ function startBridge() {
     }
   });
   bridge.stderr.on('data', (chunk) => console.error('[PoB]', chunk.toString()));
-  bridge.on('error', (err) => {
-    for (const resolve of pending.values()) resolve({ ok: false, error: `Could not start LuaJIT: ${err.message}` });
-    pending.clear();
-    bridge = null;
-    mainWindow?.webContents.send('bridge-status', { ok: false, error: `Could not start LuaJIT: ${err.message}` });
-  });
+  bridge.on('error', (err) => failPending(`Could not start LuaJIT: ${err.message}`));
   bridge.on('exit', (code) => {
-    for (const resolve of pending.values()) resolve({ ok: false, error: `PoB bridge exited (${code})` });
-    pending.clear();
+    failPending(`PoB bridge exited (${code})`);
     bridge = null;
     mainWindow?.webContents.send('bridge-status', { ok: false, error: `PoB bridge exited (${code})` });
   });
   return { ok: true };
 }
 
+function failPending(error) {
+  for (const resolve of pending.values()) {
+    if (resolve.timer) clearTimeout(resolve.timer);
+    resolve({ ok: false, error });
+  }
+  pending.clear();
+  bridge = null;
+}
+
 function callBridge(method, params = {}) {
   return new Promise((resolve) => {
     if (!bridge) return resolve({ ok: false, error: 'PoB bridge is not running' });
     const id = ++requestId;
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      resolve({ ok: false, error: `PoB bridge timed out (${method})` });
+    }, BRIDGE_TIMEOUT_MS);
+    resolve.timer = timer;
     pending.set(id, resolve);
     bridge.stdin.write(JSON.stringify({ id, method, params }) + '\n');
   });
