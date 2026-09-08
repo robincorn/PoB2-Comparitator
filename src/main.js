@@ -1,8 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, globalShortcut, Tray, Menu, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, globalShortcut, Tray, Menu, nativeImage, screen, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { decodeShareCode } = require('./pob-code');
+const { PoeApiClient } = require('./poe-api');
+const { Persistence } = require('./persistence');
 
 let mainWindow;
 let tray;
@@ -11,6 +13,8 @@ let isQuitting = false;
 let requestId = 0;
 let buildReady = false;
 let comparisonBusy = false;
+let persistence;
+let poe;
 const pending = new Map();
 const BRIDGE_TIMEOUT_MS = 30000;
 const TOGGLE_HOTKEY = 'CommandOrControl+Shift+Space';
@@ -174,6 +178,12 @@ async function loadXml(xml, name) {
   return callBridge('loadBuild', { xml, name });
 }
 
+async function loadCharacter(character) {
+  const result = await ensureBridge();
+  if (!result.ok) return result;
+  return callBridge('loadCharacter', { character });
+}
+
 function withStats(response) {
   if (!response?.ok) return response;
   return { ...response, stats: response.result?.stats, skills: response.result?.skills || [] };
@@ -204,6 +214,75 @@ async function compareClipboardItem() {
   } finally {
     comparisonBusy = false;
   }
+}
+
+function persistAuth() {
+  if (!persistence || !poe?.auth) return;
+  try { persistence.saveAuth(poe.auth); }
+  catch (error) { console.error('Could not persist PoE auth:', error); }
+}
+
+function sendPoeStatus(extra = {}) {
+  const character = persistence?.getCharacterState() || null;
+  mainWindow?.webContents.send('poe-status', {
+    connected: Boolean(poe?.isAuthenticated()),
+    username: poe?.auth?.username || null,
+    character,
+    ...extra,
+  });
+}
+
+async function listPoeCharacters() {
+  if (!poe?.isAuthenticated()) return { ok: false, error: 'Not connected to Path of Exile.' };
+  try {
+    const characters = await poe.listCharacters();
+    persistAuth();
+    const selected = persistence.getCharacterState();
+    sendPoeStatus({ characters });
+    return { ok: true, characters, selected };
+  } catch (error) {
+    if (String(error.message).startsWith('401:')) {
+      poe.auth = null;
+      persistence.clearAuth();
+    }
+    sendPoeStatus({ error: error.message });
+    return { ok: false, error: error.message };
+  }
+}
+
+async function syncSelectedCharacter() {
+  const selected = persistence.getCharacterState();
+  if (!selected?.name) return { ok: false, error: 'Select a character first.' };
+  if (!poe?.isAuthenticated()) return { ok: false, error: 'Connect your Path of Exile account first.' };
+
+  mainWindow?.webContents.send('poe-sync-status', { state: 'syncing', character: selected });
+  try {
+    const character = await poe.getCharacter(selected.name);
+    const response = withStats(await loadCharacter(character));
+    if (!response.ok) throw new Error(response.error || 'PoB2 character import failed.');
+    markBuildLoaded();
+    persistence.saveSnapshot(character);
+    persistAuth();
+    const state = persistence.getCharacterState();
+    mainWindow?.webContents.send('poe-character', { character: state });
+    mainWindow?.webContents.send('poe-sync-status', { state: 'synced', character: state });
+    return { ok: true, ...response, character: state };
+  } catch (error) {
+    const cached = persistence.loadSnapshot();
+    mainWindow?.webContents.send('poe-sync-status', { state: cached ? 'offline' : 'error', error: error.message, character: selected });
+    return { ok: false, error: error.message, cached: Boolean(cached) };
+  }
+}
+
+async function restoreCachedBuild() {
+  const cached = persistence?.loadSnapshot();
+  if (!cached) return { ok: false, error: 'No cached character build.' };
+  const response = withStats(await loadCharacter(cached));
+  if (response.ok) {
+    markBuildLoaded();
+    mainWindow?.webContents.send('poe-sync-status', { state: 'offline', character: persistence.getCharacterState() });
+  }
+  return response;
 }
 
 ipcMain.handle('bridge-status', async () => {
@@ -239,11 +318,60 @@ ipcMain.handle('load-clipboard-build', async () => {
 
 ipcMain.handle('calculate', async () => withStats(await callBridge('getStats')));
 
-app.whenReady().then(() => {
+ipcMain.handle('poe-status', () => ({
+  connected: Boolean(poe?.isAuthenticated()),
+  username: poe?.auth?.username || null,
+  character: persistence?.getCharacterState() || null,
+}));
+
+ipcMain.handle('poe-connect', async () => {
+  try {
+    mainWindow?.webContents.send('poe-sync-status', { state: 'authorizing' });
+    const auth = await poe.authenticate();
+    persistAuth();
+    const result = await listPoeCharacters();
+    if (!result.ok) return result;
+    return { ok: true, ...result, username: auth.username || null };
+  } catch (error) {
+    sendPoeStatus({ error: error.message });
+    mainWindow?.webContents.send('poe-sync-status', { state: 'error', error: error.message });
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('poe-list-characters', listPoeCharacters);
+
+ipcMain.handle('poe-select-character', async (_event, character) => {
+  if (!character?.name) return { ok: false, error: 'Character name is required.' };
+  persistence.saveCharacterSelection(character);
+  sendPoeStatus({ selected: character });
+  return syncSelectedCharacter();
+});
+
+ipcMain.handle('poe-sync', syncSelectedCharacter);
+
+ipcMain.handle('poe-disconnect', () => {
+  poe.auth = null;
+  persistence.clearAuth();
+  sendPoeStatus();
+  return { ok: true };
+});
+
+app.whenReady().then(async () => {
+  persistence = new Persistence(app, safeStorage);
+  poe = new PoeApiClient(persistence.loadAuth());
   createTray();
   createWindow();
   if (!globalShortcut.register(TOGGLE_HOTKEY, toggleOverlay)) console.error(`Failed to register overlay hotkey: ${TOGGLE_HOTKEY}`);
   if (!globalShortcut.register(COMPARE_HOTKEY, compareClipboardItem)) console.error(`Failed to register item compare hotkey: ${COMPARE_HOTKEY}`);
+
+  const cached = await restoreCachedBuild();
+  if (!cached.ok && mainWindow) mainWindow.webContents.send('poe-sync-status', { state: 'empty' });
+  sendPoeStatus();
+
+  if (poe.isAuthenticated() && persistence.getCharacterState()) {
+    void syncSelectedCharacter();
+  }
 });
 
 app.on('will-quit', () => {
