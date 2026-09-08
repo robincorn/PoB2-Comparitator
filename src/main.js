@@ -39,17 +39,32 @@ function startBridge() {
   const projectRoot = path.join(__dirname, '..');
   const pobRoot = process.env.POB2_PATH || path.join(projectRoot, 'pob');
   const pobSrc = path.join(pobRoot, 'src');
+  const pobRuntimeLua = path.join(pobRoot, 'runtime', 'lua');
+  const pobRuntime = path.join(pobRoot, 'runtime');
   const bridgeScript = path.join(projectRoot, 'pob-bridge', 'OverlayWrapper.lua');
   const luajit = findLuaJit(projectRoot);
 
   if (!fs.existsSync(path.join(pobSrc, 'HeadlessWrapper.lua'))) {
     return { ok: false, error: `PoB2 not found at ${pobRoot}. Run npm run setup first.` };
   }
+  if (!fs.existsSync(path.join(pobRuntimeLua, 'dkjson.lua'))) {
+    return { ok: false, error: `PoB2 runtime Lua directory not found at ${pobRuntimeLua}.` };
+  }
 
   const env = {
     ...process.env,
-    LUA_PATH: `../runtime/lua/?.lua;../runtime/lua/?/init.lua;;${process.env.LUA_PATH || ''}`,
-    LUA_CPATH: `../runtime/?.dll;;${process.env.LUA_CPATH || ''}`,
+    // PoB2 is started with cwd=<pob>\src. Its Lua modules live one directory
+    // above src in <pob>\runtime\lua, so use absolute paths to avoid cwd/path
+    // assumptions in future changes.
+    LUA_PATH: [
+      path.join(pobRuntimeLua, '?.lua'),
+      path.join(pobRuntimeLua, '?', 'init.lua'),
+      process.env.LUA_PATH || '',
+    ].filter(Boolean).join(';'),
+    LUA_CPATH: [
+      path.join(pobRuntime, '?.dll'),
+      process.env.LUA_CPATH || '',
+    ].filter(Boolean).join(';'),
   };
 
   bridge = spawn(luajit, [bridgeScript], {
