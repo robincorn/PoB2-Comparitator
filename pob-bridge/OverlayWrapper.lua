@@ -31,13 +31,7 @@ end
 
 local function stats()
   local output = build.calcsTab.mainOutput or {}
-  return {
-    effectiveHitPool = output.TotalEHP,
-    effectiveMaxHit = output.SecondMinimalMaximumHitTaken,
-    totalDPS = output.TotalDPS,
-    averageDamage = output.AverageDamage,
-    speed = output.Speed,
-  }
+  return { effectiveHitPool = output.TotalEHP, effectiveMaxHit = output.SecondMinimalMaximumHitTaken, totalDPS = output.TotalDPS, averageDamage = output.AverageDamage, speed = output.Speed }
 end
 
 local function skillStats()
@@ -45,12 +39,8 @@ local function skillStats()
   local savedSkillNumber = calcsTab.input.skill_number
   local savedMainSocketGroup = build.mainSocketGroup
   local savedSelections = {}
-  for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
-    savedSelections[index] = group.mainActiveSkillCalcs
-  end
-
+  for index, group in ipairs(build.skillsTab.socketGroupList or {}) do savedSelections[index] = group.mainActiveSkillCalcs end
   rebuildOutput()
-
   local result = {}
   for groupIndex, group in ipairs(build.skillsTab.socketGroupList or {}) do
     local skillList = group.displaySkillListCalcs or {}
@@ -63,35 +53,19 @@ local function skillStats()
           group.mainActiveSkillCalcs = skillIndex
           rebuildOutput()
           local output = calcsTab.mainOutput or {}
-          local totalDPS = output.TotalDPS or 0
-          local averageDamage = output.AverageDamage or 0
-          local combinedDPS = output.CombinedDPS or totalDPS
-          local fullDPS = output.FullDPS or combinedDPS
-          local speed = output.Speed
-          local totalDot = output.TotalDot or 0
-          if totalDPS ~= 0 or averageDamage ~= 0 or totalDot ~= 0 then
-            table.insert(result, {
-              name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill",
-              group = groupIndex,
-              skillIndex = skillIndex,
-              fullDPS = fullDPS,
-              combinedDPS = combinedDPS,
-              hitDPS = totalDPS,
-              averageDamage = averageDamage,
-              speed = speed,
-              dotDPS = totalDot,
-            })
-          end
+          table.insert(result, { name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill", group = groupIndex, skillIndex = skillIndex, support = false, fullDPS = output.FullDPS or output.CombinedDPS or output.TotalDPS or 0, combinedDPS = output.CombinedDPS or output.TotalDPS or 0, hitDPS = output.TotalDPS or 0, averageDamage = output.AverageDamage or 0, speed = output.Speed, dotDPS = output.TotalDot or 0 })
         end
       end
     end
+    for _, gem in ipairs(group.gemList or {}) do
+      if gem.support then
+        table.insert(result, { name = gem.nameSpec or (gem.grantedEffect and gem.grantedEffect.name) or "Support Gem", group = groupIndex, support = true, fullDPS = 0, combinedDPS = 0, hitDPS = 0, averageDamage = 0, dotDPS = 0 })
+      end
+    end
   end
-
   build.mainSocketGroup = savedMainSocketGroup
   calcsTab.input.skill_number = savedSkillNumber
-  for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
-    group.mainActiveSkillCalcs = savedSelections[index]
-  end
+  for index, group in ipairs(build.skillsTab.socketGroupList or {}) do group.mainActiveSkillCalcs = savedSelections[index] end
   rebuildOutput()
   return result
 end
@@ -101,45 +75,20 @@ local function buildSummary()
   return { stats=stats(), skills=skillStats() }
 end
 
-local function statDelta(base, changed)
-  local out = {}
-  for key, value in pairs(changed) do
-    if type(value) == "number" and type(base[key]) == "number" then out[key] = value - base[key] end
-  end
-  return out
-end
-
 local function skillDelta(baseSkills, changedSkills)
   local baseMap, changedMap = {}, {}
   for _, skill in ipairs(baseSkills or {}) do baseMap[skill.name] = skill end
   for _, skill in ipairs(changedSkills or {}) do changedMap[skill.name] = skill end
   local names, seen = {}, {}
-  for _, skill in ipairs(baseSkills or {}) do
-    if not seen[skill.name] then names[#names + 1] = skill.name; seen[skill.name] = true end
-  end
-  for _, skill in ipairs(changedSkills or {}) do
-    if not seen[skill.name] then names[#names + 1] = skill.name; seen[skill.name] = true end
-  end
+  for _, skill in ipairs(baseSkills or {}) do if not seen[skill.name] then names[#names + 1] = skill.name; seen[skill.name] = true end end
+  for _, skill in ipairs(changedSkills or {}) do if not seen[skill.name] then names[#names + 1] = skill.name; seen[skill.name] = true end end
   local result = {}
   for _, name in ipairs(names) do
     local base, changed = baseMap[name] or {}, changedMap[name] or {}
-    local baseDPS = base.combinedDPS or base.hitDPS or 0
-    local changedDPS = changed.combinedDPS or changed.hitDPS or 0
-    local baseHit, changedHit = base.averageDamage or 0, changed.averageDamage or 0
-    local baseDot, changedDot = base.dotDPS or 0, changed.dotDPS or 0
+    local baseDPS = base.combinedDPS or base.hitDPS or 0; local changedDPS = changed.combinedDPS or changed.hitDPS or 0
+    local baseHit, changedHit = base.averageDamage or 0, changed.averageDamage or 0; local baseDot, changedDot = base.dotDPS or 0, changed.dotDPS or 0
     if baseDPS ~= 0 or changedDPS ~= 0 or baseHit ~= 0 or changedHit ~= 0 or baseDot ~= 0 or changedDot ~= 0 then
-      result[#result + 1] = {
-        name=name,
-        baseDPS=baseDPS,
-        changedDPS=changedDPS,
-        dpsDelta=changedDPS-baseDPS,
-        baseAverageHit=baseHit,
-        changedAverageHit=changedHit,
-        averageHitDelta=changedHit-baseHit,
-        baseDotDPS=baseDot,
-        changedDotDPS=changedDot,
-        dotDelta=changedDot-baseDot,
-      }
+      result[#result + 1] = { name=name, baseDPS=baseDPS, changedDPS=changedDPS, dpsDelta=changedDPS-baseDPS, baseAverageHit=baseHit, changedAverageHit=changedHit, averageHitDelta=changedHit-baseHit, baseDotDPS=baseDot, changedDotDPS=changedDot, dotDelta=changedDot-baseDot }
     end
   end
   return result
@@ -156,23 +105,11 @@ local function compareItem(itemText)
     assert(slotName and build.itemsTab.slots[slotName], "PoB2 could not determine an equipment slot for this item")
     build.itemsTab:AddItem(item)
     build.itemsTab:EquipItemInSet(item, build.itemsTab.activeItemSetId)
-    build.buildFlag = true
-    build.modFlag = true
+    build.buildFlag = true; build.modFlag = true
     local changedSummary = buildSummary()
-    return {
-      itemName=item.name or item.base.name or "Clipboard Item",
-      slot=slotName,
-      base=baseSummary,
-      changed=changedSummary,
-      delta={
-        effectiveHitPool=(changedSummary.stats.effectiveHitPool or 0)-(baseSummary.stats.effectiveHitPool or 0),
-        effectiveMaxHit=(changedSummary.stats.effectiveMaxHit or 0)-(baseSummary.stats.effectiveMaxHit or 0),
-        skills=skillDelta(baseSummary.skills, changedSummary.skills),
-      }
-    }
+    return { itemName=item.name or item.base.name or "Clipboard Item", slot=slotName, base=baseSummary, changed=changedSummary, delta={ effectiveHitPool=(changedSummary.stats.effectiveHitPool or 0)-(baseSummary.stats.effectiveHitPool or 0), effectiveMaxHit=(changedSummary.stats.effectiveMaxHit or 0)-(baseSummary.stats.effectiveMaxHit or 0), skills=skillDelta(baseSummary.skills, changedSummary.skills) } }
   end)
-  loadBuildFromXML(savedXml, "Restored Build")
-  rebuildOutput()
+  loadBuildFromXML(savedXml, "Restored Build"); rebuildOutput()
   if not ok then error(result) end
   return result
 end
@@ -182,47 +119,26 @@ local function loadCharacter(character)
   assert(type(character.name) == "string" and character.name ~= "", "character.name is required")
   assert(type(character.passives) == "table", "character.passives is required")
   assert(type(character.equipment) == "table", "character.equipment is required")
-  loadBuildFromJSON(character, character)
-  rebuildOutput()
-  return buildSummary()
+  loadBuildFromJSON(character, character); rebuildOutput(); return buildSummary()
 end
 
 local function dispatch(request)
-  if request.method == "getStatus" then
-    return { status="ready", pobVersion=launch.versionNumber, branch=launch.versionBranch }
-  elseif request.method == "loadBuild" then
-    assert(type(request.params) == "table", "params is required")
-    assert(type(request.params.xml) == "string", "params.xml is required")
-    loadBuildFromXML(request.params.xml, request.params.name or "Overlay Build")
-    return buildSummary()
-  elseif request.method == "loadCharacter" then
-    assert(type(request.params) == "table", "params is required")
-    return loadCharacter(request.params.character)
-  elseif request.method == "compareItem" then
-    assert(type(request.params) == "table", "params is required")
-    return compareItem(request.params.itemText)
-  elseif request.method == "getStats" then
-    return buildSummary()
-  elseif request.method == "resetBuild" then
-    newBuild()
-    return { stats=stats(), skills={} }
+  if request.method == "getStatus" then return { status="ready", pobVersion=launch.versionNumber, branch=launch.versionBranch }
+  elseif request.method == "loadBuild" then assert(type(request.params) == "table", "params is required"); assert(type(request.params.xml) == "string", "params.xml is required"); loadBuildFromXML(request.params.xml, request.params.name or "Overlay Build"); return buildSummary()
+  elseif request.method == "loadCharacter" then assert(type(request.params) == "table", "params is required"); return loadCharacter(request.params.character)
+  elseif request.method == "compareItem" then assert(type(request.params) == "table", "params is required"); return compareItem(request.params.itemText)
+  elseif request.method == "getStats" then return buildSummary()
+  elseif request.method == "resetBuild" then newBuild(); return { stats=stats(), skills={} }
   end
   error("Unknown method: " .. tostring(request.method))
 end
 
-if not build then response(nil, false, nil, "PoB2 headless initialization did not expose build") os.exit(1) end
-
+if not build then response(nil, false, nil, "PoB2 headless initialization did not expose build"); os.exit(1) end
 while true do
-  local line = io.read("*l")
-  if not line then break end
+  local line = io.read("*l"); if not line then break end
   if line ~= "" then
     local id = nil
-    local ok, result = pcall(function()
-      local request, decodeErr = dkjson.decode(line)
-      assert(request, decodeErr or "Invalid JSON request")
-      id = request.id
-      return dispatch(request)
-    end)
+    local ok, result = pcall(function() local request, decodeErr = dkjson.decode(line); assert(request, decodeErr or "Invalid JSON request"); id = request.id; return dispatch(request) end)
     if ok then response(id, true, result) else response(id, false, nil, tostring(result)) end
   end
 end
