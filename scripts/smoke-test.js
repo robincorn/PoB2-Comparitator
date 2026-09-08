@@ -48,8 +48,13 @@ function validateStats(stats, label) {
 
 function validateSkills(skills, label) {
   if (!Array.isArray(skills)) { fail(`${label} returned no skill list: ${JSON.stringify(skills)}`); return false; }
-  const damaging = skills.filter((skill) => typeof skill?.combinedDPS === 'number' || typeof skill?.hitDPS === 'number');
-  if (!damaging.length) { fail(`${label} returned no calculated damaging skills: ${JSON.stringify(skills)}`); return false; }
+  const activeSkills = skills.filter((skill) => skill?.support !== true);
+  const supports = skills.filter((skill) => skill?.support === true);
+  if (!activeSkills.length) { fail(`${label} returned no active skills: ${JSON.stringify(skills)}`); return false; }
+  if (!activeSkills.some((skill) => typeof skill?.combinedDPS === 'number' && skill.combinedDPS > 0)) {
+    fail(`${label} returned no active skill with positive PoB2 DPS: ${JSON.stringify(skills)}`); return false;
+  }
+  console.log(`${label} skill validation: ${activeSkills.length} active, ${supports.length} support, ${activeSkills.filter((skill) => skill.combinedDPS > 0).length} with positive DPS`);
   return true;
 }
 
