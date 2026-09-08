@@ -46,9 +46,9 @@ function createTray() {
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 520,
-    height: 520,
+    height: 680,
     minWidth: 460,
-    minHeight: 420,
+    minHeight: 520,
     frame: false,
     transparent: true,
     resizable: true,
@@ -87,16 +87,13 @@ function startBridge() {
   const pobRuntime = path.join(pobRoot, 'runtime');
   const bridgeScript = path.join(projectRoot, 'pob-bridge', 'OverlayWrapper.lua');
   const luajit = findLuaJit(projectRoot);
-
   if (!fs.existsSync(path.join(pobSrc, 'HeadlessWrapper.lua'))) return { ok: false, error: `PoB2 not found at ${pobRoot}. Run npm run setup first.` };
   if (!fs.existsSync(path.join(pobRuntimeLua, 'dkjson.lua'))) return { ok: false, error: `PoB2 runtime Lua directory not found at ${pobRuntimeLua}.` };
-
   const env = {
     ...process.env,
     LUA_PATH: [path.join(pobRuntimeLua, '?.lua'), path.join(pobRuntimeLua, '?', 'init.lua'), path.join(pobSrc, '?.lua'), path.join(pobSrc, '?', 'init.lua'), process.env.LUA_PATH || ''].filter(Boolean).join(';'),
     LUA_CPATH: [path.join(pobRuntime, '?.dll'), process.env.LUA_CPATH || ''].filter(Boolean).join(';'),
   };
-
   bridge = spawn(luajit, [bridgeScript], { cwd: pobSrc, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   let buffer = '';
   bridge.stdout.on('data', (chunk) => {
@@ -148,19 +145,20 @@ function callBridge(method, params = {}) {
   });
 }
 
+async function ensureBridge() {
+  if (bridge) return { ok: true };
+  return startBridge();
+}
+
 async function loadXml(xml, name) {
-  if (!bridge) {
-    const result = startBridge();
-    if (!result.ok) return result;
-  }
+  const result = await ensureBridge();
+  if (!result.ok) return result;
   return callBridge('loadBuild', { xml, name });
 }
 
 ipcMain.handle('bridge-status', async () => {
-  if (!bridge) {
-    const result = startBridge();
-    if (!result.ok) return result;
-  }
+  const result = await ensureBridge();
+  if (!result.ok) return result;
   return callBridge('getStatus');
 });
 
@@ -183,6 +181,14 @@ ipcMain.handle('load-clipboard-build', async () => {
   catch (error) { return { ok: false, error: error.message }; }
   const response = await loadXml(xml, 'Clipboard Build');
   return { ...response, stats: response.result };
+});
+
+ipcMain.handle('compare-clipboard-item', async () => {
+  const itemText = clipboard.readText().trim();
+  if (!itemText) return { ok: false, error: 'Clipboard is empty.' };
+  const result = await ensureBridge();
+  if (!result.ok) return result;
+  return callBridge('compareItem', { itemText });
 });
 
 ipcMain.handle('calculate', async () => {
