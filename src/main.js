@@ -13,11 +13,8 @@ const TOGGLE_HOTKEY = 'CommandOrControl+Shift+Space';
 
 function toggleOverlay() {
   if (!mainWindow) return;
-  if (mainWindow.isVisible()) {
-    mainWindow.hide();
-  } else {
-    mainWindow.showInactive();
-  }
+  if (mainWindow.isVisible()) mainWindow.hide();
+  else mainWindow.showInactive();
 }
 
 function createWindow() {
@@ -40,10 +37,7 @@ function createWindow() {
   });
   mainWindow.setAlwaysOnTop(true, 'floating');
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
 }
 
 function findLuaJit(root) {
@@ -78,10 +72,7 @@ function startBridge() {
       path.join(pobSrc, '?', 'init.lua'),
       process.env.LUA_PATH || '',
     ].filter(Boolean).join(';'),
-    LUA_CPATH: [
-      path.join(pobRuntime, '?.dll'),
-      process.env.LUA_CPATH || '',
-    ].filter(Boolean).join(';'),
+    LUA_CPATH: [path.join(pobRuntime, '?.dll'), process.env.LUA_CPATH || ''].filter(Boolean).join(';'),
   };
 
   bridge = spawn(luajit, [bridgeScript], {
@@ -159,6 +150,11 @@ ipcMain.handle('bridge-status', async () => {
   return callBridge('getStatus');
 });
 
+ipcMain.handle('hide-overlay', () => {
+  mainWindow?.hide();
+  return { ok: true };
+});
+
 ipcMain.handle('select-build', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Select a Path of Building XML build',
@@ -166,7 +162,6 @@ ipcMain.handle('select-build', async () => {
     filters: [{ name: 'Path of Building', extensions: ['xml'] }],
   });
   if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true };
-
   const buildPath = result.filePaths[0];
   const xml = fs.readFileSync(buildPath, 'utf8');
   const response = await loadXml(xml, path.basename(buildPath, '.xml'));
@@ -176,14 +171,12 @@ ipcMain.handle('select-build', async () => {
 ipcMain.handle('load-clipboard-build', async () => {
   const code = clipboard.readText().trim();
   if (!code) return { ok: false, error: 'Clipboard is empty.' };
-
   let xml;
   try {
     xml = decodeShareCode(code);
   } catch (error) {
     return { ok: false, error: error.message };
   }
-
   const response = await loadXml(xml, 'Clipboard Build');
   return { ...response, stats: response.result };
 });
@@ -195,7 +188,6 @@ ipcMain.handle('calculate', async () => {
 
 app.whenReady().then(() => {
   createWindow();
-
   if (!globalShortcut.register(TOGGLE_HOTKEY, toggleOverlay)) {
     console.error(`Failed to register overlay hotkey: ${TOGGLE_HOTKEY}`);
   }
