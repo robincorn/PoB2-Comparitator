@@ -83,11 +83,11 @@ function startBridge() {
       if (!line.trim()) continue;
       try {
         const message = JSON.parse(line);
-        const resolve = pending.get(message.id);
-        if (resolve) {
+        const entry = pending.get(message.id);
+        if (entry) {
           pending.delete(message.id);
-          if (resolve.timer) clearTimeout(resolve.timer);
-          resolve(message);
+          clearTimeout(entry.timer);
+          entry.resolve(message);
         }
       } catch (err) {
         console.error('Invalid bridge output:', line, err);
@@ -105,9 +105,9 @@ function startBridge() {
 }
 
 function failPending(error) {
-  for (const resolve of pending.values()) {
-    if (resolve.timer) clearTimeout(resolve.timer);
-    resolve({ ok: false, error });
+  for (const entry of pending.values()) {
+    clearTimeout(entry.timer);
+    entry.resolve({ ok: false, error });
   }
   pending.clear();
   bridge = null;
