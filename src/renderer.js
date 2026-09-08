@@ -2,6 +2,7 @@ const overlay = document.getElementById('overlay');
 const status = document.getElementById('status');
 const file = document.getElementById('file');
 const calculate = document.getElementById('calculate');
+const compare = document.getElementById('compare');
 const pinnedKey = 'pob2-comparitator:pinned-tiles';
 const pinned = new Set(JSON.parse(localStorage.getItem(pinnedKey) || '[]'));
 
@@ -100,7 +101,7 @@ function showError(error) {
 
 function showResult(result) {
   if (!result?.ok) { showError(result?.error); return; }
-  status.textContent = 'PoB2 ready · item compare: Ctrl + Shift + C';
+  status.textContent = 'PoB2 ready · copy item, then Ctrl + Shift + C';
   status.className = 'status ok';
   renderStats(result.stats);
   renderSkills(result.skills);
@@ -135,6 +136,18 @@ function setupInteraction() {
   });
 }
 
+async function compareClipboard() {
+  compare.disabled = true;
+  compare.textContent = 'Comparing…';
+  try {
+    const result = await window.pob.compareClipboardItem();
+    if (!result?.ok) showError(result?.error);
+  } finally {
+    compare.disabled = false;
+    compare.textContent = 'Compare Clipboard Item';
+  }
+}
+
 for (const button of document.querySelectorAll('.pin')) {
   button.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -149,6 +162,7 @@ document.getElementById('load').addEventListener('click', async () => {
   const result = await window.pob.selectBuild();
   if (!result.canceled) buildLoaded(result, result.file || 'XML build');
 });
+compare.addEventListener('click', compareClipboard);
 calculate.addEventListener('click', async () => {
   calculate.disabled = true;
   calculate.textContent = 'Calculating…';
