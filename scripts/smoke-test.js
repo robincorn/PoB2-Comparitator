@@ -27,9 +27,8 @@ if (process.exitCode) process.exit();
 
 const env = { ...process.env };
 
-// bridge runs with cwd=<repo>\pob\src, while dkjson lives at
-// <repo>\pob\runtime\lua. Resolve that path explicitly instead of relying on
-// an assumed relative layout elsewhere in the project.
+// PoB2 is started with cwd=<repo>\\pob\\src, but its Lua modules live under
+// <repo>\\pob\\runtime\\lua. Use absolute paths so this stays correct on Windows.
 env.LUA_PATH = [
   path.join(pobRuntimeLua, '?.lua'),
   path.join(pobRuntimeLua, '?', 'init.lua'),
@@ -37,7 +36,6 @@ env.LUA_PATH = [
 ].filter(Boolean).join(';');
 
 env.LUA_CPATH = [
-  path.join(pobRoot, 'runtime', '?.dll'),
   path.join(pobRoot, 'runtime', '?.dll'),
   env.LUA_CPATH || '',
 ].filter(Boolean).join(';');
