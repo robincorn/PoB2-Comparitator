@@ -90,6 +90,10 @@ local function skillStats()
   return result
 end
 
+local function buildSummary()
+  return { stats=stats(), skills=skillStats() }
+end
+
 local function statDelta(base, changed)
   local out = {}
   for key, value in pairs(changed) do
@@ -98,11 +102,46 @@ local function statDelta(base, changed)
   return out
 end
 
+local function skillDelta(baseSkills, changedSkills)
+  local baseMap, changedMap = {}, {}
+  for _, skill in ipairs(baseSkills or {}) do baseMap[skill.name] = skill end
+  for _, skill in ipairs(changedSkills or {}) do changedMap[skill.name] = skill end
+  local names, seen = {}, {}
+  for _, skill in ipairs(baseSkills or {}) do
+    if not seen[skill.name] then names[#names + 1] = skill.name; seen[skill.name] = true end
+  end
+  for _, skill in ipairs(changedSkills or {}) do
+    if not seen[skill.name] then names[#names + 1] = skill.name; seen[skill.name] = true end
+  end
+  local result = {}
+  for _, name in ipairs(names) do
+    local base, changed = baseMap[name] or {}, changedMap[name] or {}
+    local baseDPS = base.combinedDPS or base.hitDPS or 0
+    local changedDPS = changed.combinedDPS or changed.hitDPS or 0
+    local baseHit, changedHit = base.averageDamage or 0, changed.averageDamage or 0
+    local baseDot, changedDot = base.dotDPS or 0, changed.dotDPS or 0
+    if baseDPS ~= 0 or changedDPS ~= 0 or baseHit ~= 0 or changedHit ~= 0 or baseDot ~= 0 or changedDot ~= 0 then
+      result[#result + 1] = {
+        name=name,
+        baseDPS=baseDPS,
+        changedDPS=changedDPS,
+        dpsDelta=changedDPS-baseDPS,
+        baseAverageHit=baseHit,
+        changedAverageHit=changedHit,
+        averageHitDelta=changedHit-baseHit,
+        baseDotDPS=baseDot,
+        changedDotDPS=changedDot,
+        dotDelta=changedDot-baseDot,
+      }
+    end
+  end
+  return result
+end
+
 local function compareItem(itemText)
   assert(type(itemText) == "string" and #itemText > 0, "params.itemText is required")
   local savedXml = build:SaveDB("code")
-  runCallback("OnFrame")
-  local baseStats = stats()
+  local baseSummary = buildSummary()
   local ok, result = pcall(function()
     local item = new("Item"):Item(itemText)
     assert(item.base, "PoB2 could not parse the clipboard item")
@@ -111,9 +150,19 @@ local function compareItem(itemText)
     build.itemsTab:AddItem(item)
     build.itemsTab:EquipItemInSet(item, build.itemsTab.activeItemSetId)
     build.buildFlag = true
-    runCallback("OnFrame")
-    local changedStats = stats()
-    return { itemName=item.name or item.base.name or "Clipboard Item", slot=slotName, base=baseStats, changed=changedStats, delta=statDelta(baseStats, changedStats) }
+    build.modFlag = true
+    local changedSummary = buildSummary()
+    return {
+      itemName=item.name or item.base.name or "Clipboard Item",
+      slot=slotName,
+      base=baseSummary,
+      changed=changedSummary,
+      delta={
+        effectiveHitPool=(changedSummary.stats.effectiveHitPool or 0)-(baseSummary.stats.effectiveHitPool or 0),
+        effectiveMaxHit=(changedSummary.stats.effectiveMaxHit or 0)-(baseSummary.stats.effectiveMaxHit or 0),
+        skills=skillDelta(baseSummary.skills, changedSummary.skills),
+      }
+    }
   end)
   loadBuildFromXML(savedXml, "Restored Build")
   runCallback("OnFrame")
@@ -128,14 +177,12 @@ local function dispatch(request)
     assert(type(request.params) == "table", "params is required")
     assert(type(request.params.xml) == "string", "params.xml is required")
     loadBuildFromXML(request.params.xml, request.params.name or "Overlay Build")
-    runCallback("OnFrame")
-    return { stats=stats(), skills=skillStats() }
+    return buildSummary()
   elseif request.method == "compareItem" then
     assert(type(request.params) == "table", "params is required")
     return compareItem(request.params.itemText)
   elseif request.method == "getStats" then
-    runCallback("OnFrame")
-    return { stats=stats(), skills=skillStats() }
+    return buildSummary()
   elseif request.method == "resetBuild" then
     newBuild()
     return { stats=stats(), skills={} }
