@@ -17,7 +17,8 @@ const TOGGLE_HOTKEY = 'CommandOrControl+Shift+Space';
 const COMPARE_HOTKEY = 'CommandOrControl+Shift+C';
 
 function createTrayIcon() {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="7" fill="#17171d" stroke="#777"/><path d="M8 24 L13 8 H17 L22 24 H18.5 L17.3 20 H12.7 L11.5 24 Z M13.6 17 H16.4 L15 12.2 Z" fill="#eee"/></svg>`;
+  const iconPath = path.join(__dirname, 'assets', 'icon-32.svg');
+  const svg = fs.readFileSync(iconPath, 'utf8');
   return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
 }
 
@@ -189,15 +190,12 @@ async function compareItemText(itemText) {
 }
 
 async function compareClipboardItem() {
-  if (!buildReady) {
-    return { ok: false, error: 'Load a PoB2 build before comparing an item.' };
-  }
-  if (comparisonBusy) {
-    return { ok: false, error: 'Item comparison is already running.' };
-  }
+  if (!buildReady) return { ok: false, error: 'Load a PoB2 build before comparing an item.' };
+  if (comparisonBusy) return { ok: false, error: 'Item comparison is already running.' };
   const itemText = clipboard.readText().trim();
   if (!itemText) return { ok: false, error: 'Clipboard is empty. Copy an item from PoE first.' };
   comparisonBusy = true;
+  mainWindow?.webContents.send('item-comparison-start');
   try {
     const response = await compareItemText(itemText);
     if (response?.ok) mainWindow?.webContents.send('item-comparison', response.result);
