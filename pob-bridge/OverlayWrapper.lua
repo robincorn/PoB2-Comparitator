@@ -48,9 +48,10 @@ local function skillStats()
     }
   end
 
-  -- PoB2 itself uses displaySkillList (not displaySkillListCalcs) when selecting
-  -- a skill. The latter is a calculation-side representation and its indices
-  -- are not the UI selection indices we need to write back to the socket group.
+  -- Follow PoB2's own TestSkills selection helper exactly: the UI skill list is
+  -- used for the index, both selection fields are synchronized, buildFlag is
+  -- set, and OnFrame performs the calculation. Do not force BuildOutput or
+  -- modFlag here; that would add behavior not used by PoB2's normal selection.
   for groupIndex, group in ipairs(build.skillsTab.socketGroupList or {}) do
     local skillList = group.displaySkillList or {}
     for skillIndex, activeSkill in ipairs(skillList) do
@@ -61,31 +62,21 @@ local function skillStats()
         group.mainActiveSkill = skillIndex
         group.mainActiveSkillCalcs = skillIndex
         build.buildFlag = true
-        build.modFlag = true
 
-        -- This is the same selection/update sequence used by PoB2's own tests
-        -- for per-skill calculations.
-        runCallback("OnFrame")
-        calcsTab:BuildOutput()
         runCallback("OnFrame")
 
         local output = calcsTab.mainOutput or {}
-        local fullDPS = output.FullDPS
-        local combinedDPS = output.CombinedDPS
-        local hitDPS = output.TotalDPS
-        local dotDPS = output.TotalDotDPS or output.TotalDot or 0
-
         table.insert(result, {
           name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill",
           group = groupIndex,
           skillIndex = skillIndex,
           support = false,
-          fullDPS = fullDPS or 0,
-          combinedDPS = combinedDPS or 0,
-          hitDPS = hitDPS or 0,
+          fullDPS = output.FullDPS or 0,
+          combinedDPS = output.CombinedDPS or 0,
+          hitDPS = output.TotalDPS or 0,
           averageDamage = output.AverageDamage or 0,
           speed = output.Speed,
-          dotDPS = dotDPS
+          dotDPS = output.TotalDotDPS or output.TotalDot or 0
         })
       end
     end
@@ -134,7 +125,7 @@ local function skillDelta(baseSkills, changedSkills)
   local result = {}
   for _, name in ipairs(names) do
     local base, changed = baseMap[name] or {}, changedMap[name] or {}
-    local baseDPS = base.combinedDPS or base.hitDPS or 0; local changedDPS = changed.combinedDPS or changed.hitDPS or 0
+    local baseDPS = base.fullDPS or base.combinedDPS or base.hitDPS or 0; local changedDPS = changed.fullDPS or changed.combinedDPS or changed.hitDPS or 0
     local baseHit, changedHit = base.averageDamage or 0, changed.averageDamage or 0; local baseDot, changedDot = base.dotDPS or 0, changed.dotDPS or 0
     if baseDPS ~= 0 or changedDPS ~= 0 or baseHit ~= 0 or changedHit ~= 0 or baseDot ~= 0 or changedDot ~= 0 then
       result[#result + 1] = { name=name, baseDPS=baseDPS, changedDPS=changedDPS, dpsDelta=changedDPS-baseDPS, baseAverageHit=baseHit, changedAverageHit=changedHit, averageHitDelta=changedHit-baseHit, baseDotDPS=baseDot, changedDotDPS=changedDot, dotDelta=changedDot-baseDot }
