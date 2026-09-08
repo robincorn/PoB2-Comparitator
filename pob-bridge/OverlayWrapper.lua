@@ -1,9 +1,6 @@
 -- Thin JSONL RPC bridge around PoB2's existing HeadlessWrapper.
 -- This file intentionally contains no calculation logic of its own.
 
--- PoB2's headless wrapper prints startup messages and expects to be able to
--- print to stdout. We keep stdout exclusively for JSONL transport by routing
--- all ordinary print() output to stderr before loading PoB.
 local nativePrint = print
 local function log(...)
   local parts = {}
@@ -49,6 +46,16 @@ local function stats()
   }
 end
 
+local function importShareCode(code, name)
+  assert(type(code) == "string" and #code > 0, "params.code is required")
+  -- This mirrors PoB2's ImportTab.lua build-code path:
+  -- URL-safe base64 -> base64 decode -> Inflate -> XML -> existing loader.
+  local xmlText = Inflate(common.base64.decode(code:gsub("-", "+"):gsub("_", "/")))
+  assert(type(xmlText) == "string" and #xmlText > 0, "Invalid PoB2 share code")
+  loadBuildFromXML(xmlText, name or "Imported Build")
+  return stats()
+end
+
 local function dispatch(request)
   if request.method == "getStatus" then
     return {
@@ -61,6 +68,9 @@ local function dispatch(request)
     assert(type(request.params.xml) == "string", "params.xml is required")
     loadBuildFromXML(request.params.xml, request.params.name or "Overlay Build")
     return stats()
+  elseif request.method == "loadShareCode" then
+    assert(type(request.params) == "table", "params is required")
+    return importShareCode(request.params.code, request.params.name)
   elseif request.method == "getStats" then
     runCallback("OnFrame")
     return stats()
@@ -71,10 +81,6 @@ local function dispatch(request)
   error("Unknown method: " .. tostring(request.method))
 end
 
--- Do not enter a read loop until HeadlessWrapper has completely initialized.
--- On startup failures HeadlessWrapper may already have displayed an error and
--- returned. In that case `build` will be absent, so fail fast with a machine-
--- readable response instead of hanging until the parent timeout.
 if not build then
   response(nil, false, nil, "PoB2 headless initialization did not expose build")
   os.exit(1)
