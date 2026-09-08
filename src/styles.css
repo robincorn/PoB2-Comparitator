@@ -15,7 +15,7 @@ button.primary { background:rgba(67,108,151,.78); border-color:rgba(126,172,220,
 .control-dock { position:absolute; left:24px; top:42px; width:176px; padding:12px; border:1px solid rgba(255,255,255,.15); border-radius:13px; background:rgba(12,12,17,.86); box-shadow:0 14px 42px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.05); backdrop-filter:blur(16px); opacity:0; transform:translateX(-6px); transition:opacity .12s, transform .12s; pointer-events:auto; }
 .dock-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
 .dock-brand { display:flex; align-items:center; gap:8px; }
-.brand-mark { display:grid; place-items:center; width:27px; height:27px; border:1px solid rgba(255,255,255,.18); border-radius:7px; background:rgba(255,255,255,.07); font-size:12px; font-weight:800; }
+.brand-mark { display:block; width:27px; height:27px; border-radius:7px; object-fit:cover; }
 .dock-brand strong,.dock-brand span { display:block; }
 .dock-brand strong { font-size:12px; line-height:13px; }
 .dock-brand div span { color:#85858e; font-size:7px; letter-spacing:.13em; }
@@ -28,9 +28,10 @@ button.primary { background:rgba(67,108,151,.78); border-color:rgba(126,172,220,
 .status { margin-top:9px; padding:6px 7px; border:1px solid rgba(255,255,255,.09); border-radius:7px; background:rgba(255,255,255,.045); color:#aaaab2; font-size:8px; line-height:11px; }
 .status.ok { border-color:rgba(67,180,111,.22); background:rgba(30,105,61,.23); color:#b8efc8; }
 .status.error { border-color:rgba(210,70,70,.25); background:rgba(115,30,30,.27); color:#ffc0c0; }
-.dock-help { display:flex; flex-wrap:wrap; align-items:center; gap:3px; margin-top:10px; color:#777780; font-size:7px; line-height:10px; }
+.dock-help { display:flex; flex-direction:column; gap:5px; margin-top:10px; color:#777780; font-size:7px; line-height:10px; }
+.dock-help div { display:flex; flex-wrap:wrap; align-items:center; gap:3px; }
+.dock-help span { width:100%; padding-left:2px; }
 kbd { padding:2px 3px; border:1px solid rgba(255,255,255,.11); border-radius:3px; background:rgba(255,255,255,.05); color:#aaaab2; font:inherit; }
-.dock-help span { width:100%; }
 .tile { position:relative; min-width:0; padding:12px; border:1px solid rgba(255,255,255,.14); border-radius:12px; background:rgba(15,15,21,.78); box-shadow:0 14px 42px rgba(0,0,0,.46), inset 0 1px rgba(255,255,255,.045); backdrop-filter:blur(18px); pointer-events:auto; }
 .tile-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:11px; color:#85858e; font-size:8px; font-weight:700; letter-spacing:.1em; }
 .pin { width:20px; height:20px; padding:0; border:0; border-radius:5px; background:transparent; color:#777780; font-size:12px; line-height:18px; }
