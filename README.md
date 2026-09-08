@@ -23,24 +23,38 @@ From the repository root:
 ```powershell
 npm install
 npm run setup
+npm run smoke
 npm start
 ```
 
-Or double-click:
-
-```text
-scripts\setup-pob.cmd
-```
+Or double-click `scripts\setup-pob.cmd` for the PoB2/LuaJIT setup step.
 
 `setup` does the rest:
 
 1. Downloads PoB2 `dev` into `pob/` if it is missing.
 2. Updates an existing `pob/` checkout to the current upstream `dev`.
-3. Installs LuaJIT through WinGet only if the project-local runtime is missing.
-4. Copies the LuaJIT executable/runtime into `.tools\luajit` so the overlay does not depend on your global PATH.
-5. Configures PoB2's `runtime/*.dll` automatically when the bridge starts.
+3. Records the exact PoB2 commit in `.tools\pob2-commit.txt`.
+4. Installs LuaJIT through WinGet only if the project-local runtime is missing.
+5. Copies the LuaJIT executable/runtime into `.tools\luajit` so the overlay does not depend on your global PATH.
+6. Configures PoB2's `runtime/*.dll` automatically when the bridge starts.
 
 The local `pob/` and `.tools/` directories are ignored by Git and are safe to recreate.
+
+## Smoke test
+
+Before opening Electron, run:
+
+```powershell
+npm run smoke
+```
+
+This starts the real LuaJIT + PoB2 headless bridge and sends a JSONL `getStatus` request. A successful result looks like:
+
+```text
+SMOKE TEST PASSED: PoB2 <version> (<branch>)
+```
+
+This isolates PoB2/bridge problems from Electron problems.
 
 ## Updating
 
@@ -48,17 +62,20 @@ Run:
 
 ```powershell
 npm run setup
+npm run smoke
 ```
 
-This refreshes the PoB2 checkout without touching our overlay code. The intended long-term workflow is to test the new PoB2 version first and only then pin/ship it as a known-good version.
+`setup` refreshes the PoB2 checkout without touching our overlay code. The exact revision is recorded locally so a known-good PoB2 version can later be pinned for releases.
 
-## Test flow
+## Overlay test flow
 
 1. Start the overlay.
-2. Confirm `PoB2 connected`.
+2. Confirm the PoB2 connection status.
 3. Click `Load PoB2 Build` and select an exported `.xml` build.
 4. Click `Calculate Stats`.
 5. Confirm that the displayed values come from PoB2's calculation output.
+
+The bridge has a timeout so a broken PoB2 process cannot leave the UI waiting forever. Startup/runtime errors are reported back to the overlay.
 
 ## Current scope
 
