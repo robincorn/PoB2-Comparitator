@@ -1,7 +1,9 @@
 -- Thin JSONL RPC bridge around PoB2's existing HeadlessWrapper.
 -- This file intentionally contains no calculation logic of its own.
 
--- Keep diagnostic output away from stdout: stdout is our JSONL transport.
+-- PoB2's headless wrapper prints startup messages and expects to be able to
+-- print to stdout. We keep stdout exclusively for JSONL transport by routing
+-- all ordinary print() output to stderr before loading PoB2.
 local nativePrint = print
 local function log(...)
   local parts = {}
@@ -13,8 +15,8 @@ local function log(...)
 end
 print = log
 
--- PoB2's headless wrapper expects to be launched from pob/src and performs its
--- full startup before exposing `build` and returning control to this bridge.
+-- PoB2's HeadlessWrapper owns the complete application initialization and
+-- exposes `build` when that initialization returns.
 dofile("HeadlessWrapper.lua")
 
 local dkjson = require "dkjson"
@@ -63,6 +65,15 @@ local function dispatch(request)
     return stats()
   end
   error("Unknown method: " .. tostring(request.method))
+end
+
+-- Do not enter a read loop until HeadlessWrapper has completely initialized.
+-- On startup failures HeadlessWrapper may already have displayed an error and
+-- returned. In that case `build` will be absent, so fail fast with a machine-
+-- readable response instead of hanging until the parent timeout.
+if not build then
+  response(nil, false, nil, "PoB2 headless initialization did not expose build")
+  os.exit(1)
 end
 
 while true do
