@@ -10,18 +10,19 @@ const localPobStatus = document.getElementById('local-pob-status');
 const pinnedKey = 'pob2-comparitator:pinned-tiles';
 const pinned = new Set(JSON.parse(localStorage.getItem(pinnedKey) || '[]'));
 
-function escapeHtml(value) { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
+function escapeHtml(value) { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#039;'); }
 function formatStat(value) { if (value === undefined || value === null || Number.isNaN(value)) return '—'; if (typeof value !== 'number') return String(value); return Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, { maximumFractionDigits: 2 }); }
 function formatDelta(value) { if (value === undefined || value === null || Number.isNaN(value)) return '—'; if (value === 0) return '±0'; const text = formatStat(Math.abs(value)); return value > 0 ? `+${text}` : `-${text}`; }
 function formatPercent(delta, base) { if (!Number.isFinite(delta) || !Number.isFinite(base) || base === 0) return ''; const pct = (delta / Math.abs(base)) * 100; return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`; }
 function renderStats(stats) { if (!stats) return; document.getElementById('ehp').textContent = formatStat(stats.effectiveHitPool); document.getElementById('maxhit').textContent = formatStat(stats.effectiveMaxHit); }
+function skillDps(skill) { return skill.fullDPS ?? skill.combinedDPS ?? skill.hitDPS ?? skill.dotDPS ?? 0; }
 function renderSkills(skills) {
   const container = document.getElementById('skills');
   if (!skills?.length) { container.innerHTML = '<div class="empty-state">No calculated active skills found.</div>'; return; }
   const groups = new Map();
   for (const skill of skills) { const key = skill.group ?? 0; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(skill); }
   container.innerHTML = [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([group, entries]) => {
-    const rows = entries.map(skill => `<div class="skill-row ${skill.support ? 'support-row' : ''}"><div class="skill-name" title="${escapeHtml(skill.name)}">${escapeHtml(skill.name)}</div><div><span>${skill.support ? 'GEM' : 'DPS'}</span><strong>${skill.support ? 'Support' : formatStat(skill.combinedDPS || skill.hitDPS || skill.dotDPS)}</strong></div><div><span>${skill.support ? 'TYPE' : 'AVG'}</span><strong>${skill.support ? 'Support' : formatStat(skill.averageDamage)}</strong></div></div>`).join('');
+    const rows = entries.map(skill => `<div class="skill-row ${skill.support ? 'support-row' : ''}"><div class="skill-name" title="${escapeHtml(skill.name)}">${escapeHtml(skill.name)}</div><div><span>${skill.support ? 'GEM' : 'DPS'}</span><strong>${skill.support ? 'Support' : formatStat(skillDps(skill))}</strong></div><div><span>${skill.support ? 'TYPE' : 'AVG'}</span><strong>${skill.support ? 'Support' : formatStat(skill.averageDamage)}</strong></div></div>`).join('');
     return `<div class="skill-group" data-group="${group}">${rows}</div>`;
   }).join('');
 }
