@@ -7,11 +7,9 @@ button:hover { border-color:rgba(255,255,255,.24); background:rgba(40,40,48,.9);
 button:active { transform:translateY(1px); }
 button:disabled { opacity:.45; cursor:default; }
 button.primary { background:rgba(67,108,151,.72); border-color:rgba(126,172,220,.4); }
-
 .overlay { position:relative; width:100vw; height:100vh; pointer-events:none; }
 .overlay-open .dashboard, .overlay-open .control-dock, .overlay-open .overlay-hint { opacity:1; transform:none; }
 .dashboard { position:absolute; left:220px; top:42px; width:min(930px, calc(100vw - 260px)); display:grid; grid-template-columns:190px 190px minmax(330px, 1fr); gap:10px; align-items:start; opacity:0; transform:translateY(-6px); transition:opacity .12s, transform .12s; }
-
 .control-dock { position:absolute; left:24px; top:42px; width:176px; padding:12px; border:1px solid rgba(255,255,255,.12); border-radius:13px; background:rgba(11,11,16,.84); box-shadow:0 14px 42px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.04); backdrop-filter:blur(16px); opacity:0; transform:translateX(-6px); transition:opacity .12s, transform .12s; pointer-events:auto; }
 .dock-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
 .dock-brand { display:flex; align-items:center; gap:8px; }
@@ -31,7 +29,6 @@ button.primary { background:rgba(67,108,151,.72); border-color:rgba(126,172,220,
 .dock-help { display:flex; flex-wrap:wrap; align-items:center; gap:3px; margin-top:10px; color:#66666f; font-size:7px; line-height:10px; }
 kbd { padding:2px 3px; border:1px solid rgba(255,255,255,.09); border-radius:3px; background:rgba(255,255,255,.04); color:#9999a1; font:inherit; }
 .dock-help span { width:100%; }
-
 .tile { position:relative; min-width:0; padding:12px; border:1px solid rgba(255,255,255,.12); border-radius:12px; background:rgba(10,10,15,.78); box-shadow:0 14px 42px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.035); backdrop-filter:blur(16px); pointer-events:auto; }
 .tile-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:11px; color:#6f6f78; font-size:8px; font-weight:700; letter-spacing:.1em; }
 .pin { width:20px; height:20px; padding:0; border:0; border-radius:5px; background:transparent; color:#66666f; font-size:12px; line-height:18px; }
@@ -50,7 +47,6 @@ kbd { padding:2px 3px; border:1px solid rgba(255,255,255,.09); border-radius:3px
 .skill-row span { display:block; color:#696970; font-size:7px; letter-spacing:.05em; }
 .skill-row strong { display:block; margin-top:2px; color:#ededf0; font-size:10px; font-weight:650; }
 .empty-state { padding:15px 4px; color:#66666f; font-size:8px; text-align:center; }
-
 .comparison-tile { grid-column:1 / span 3; width:100%; min-height:160px; }
 .item-title { display:flex; align-items:baseline; gap:8px; padding-right:65px; }
 .item-title strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#eeeeF1; font-size:13px; }
@@ -77,16 +73,13 @@ kbd { padding:2px 3px; border:1px solid rgba(255,255,255,.09); border-radius:3px
 .skill-compare-row strong { display:block; margin-top:1px; color:#d7d7dc; font-size:8px; font-weight:550; }
 .skill-compare-row em { min-width:65px; font-size:8px; font-style:normal; font-weight:700; text-align:right; }
 .comparison-hint { margin-top:7px; color:#5e5e67; font-size:7px; }
-
 .overlay-hint { position:absolute; left:24px; bottom:24px; color:rgba(180,180,188,.45); font-size:7px; letter-spacing:.1em; opacity:0; transition:opacity .12s; }
-
-body:not(.overlay-open) .tile:not(.pinned) { visibility:hidden; }
+body:not(.overlay-open) .tile:not(.pinned) { display:none; }
 body:not(.overlay-open) .control-dock { visibility:hidden; }
 body:not(.overlay-open) .overlay-hint { visibility:hidden; }
-body:not(.overlay-open) .tile.pinned { opacity:1; transform:none; }
-body:not(.overlay-open) .comparison-tile:not(.pinned) { visibility:hidden; }
 body:not(.overlay-open) .dashboard { opacity:1; transform:none; }
-
+body:not(.overlay-open) .tile.pinned { opacity:1; transform:none; }
+body:not(.overlay-open) .comparison-tile:not(.pinned) { display:none; }
 @media (max-width: 1000px) {
   .dashboard { left:210px; width:calc(100vw - 230px); grid-template-columns:1fr 1fr; }
   .skills-tile { grid-column:1 / span 2; grid-row:auto; }
