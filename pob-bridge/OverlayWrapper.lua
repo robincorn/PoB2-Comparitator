@@ -21,6 +21,14 @@ local function response(id, ok, result, err)
   io.stdout:flush()
 end
 
+local function rebuildOutput()
+  build.buildFlag = true
+  build.modFlag = true
+  runCallback("OnFrame")
+  build.calcsTab:BuildOutput()
+  runCallback("OnFrame")
+end
+
 local function stats()
   local output = build.calcsTab.mainOutput or {}
   return {
@@ -41,19 +49,19 @@ local function skillStats()
     savedSelections[index] = group.mainActiveSkillCalcs
   end
 
+  rebuildOutput()
+
   local result = {}
   for groupIndex, group in ipairs(build.skillsTab.socketGroupList or {}) do
-    local skillList = group.displaySkillListCalcs
-    if skillList and #skillList > 0 then
+    local skillList = group.displaySkillListCalcs or {}
+    if #skillList > 0 then
       build.mainSocketGroup = groupIndex
       calcsTab.input.skill_number = groupIndex
       for skillIndex, activeSkill in ipairs(skillList) do
         local grantedEffect = activeSkill.activeEffect and activeSkill.activeEffect.grantedEffect
         if grantedEffect then
           group.mainActiveSkillCalcs = skillIndex
-          build.buildFlag = true
-          build.modFlag = true
-          runCallback("OnFrame")
+          rebuildOutput()
           local output = calcsTab.mainOutput or {}
           local totalDPS = output.TotalDPS or 0
           local averageDamage = output.AverageDamage or 0
@@ -84,13 +92,12 @@ local function skillStats()
   for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
     group.mainActiveSkillCalcs = savedSelections[index]
   end
-  build.buildFlag = true
-  build.modFlag = true
-  runCallback("OnFrame")
+  rebuildOutput()
   return result
 end
 
 local function buildSummary()
+  rebuildOutput()
   return { stats=stats(), skills=skillStats() }
 end
 
@@ -165,7 +172,7 @@ local function compareItem(itemText)
     }
   end)
   loadBuildFromXML(savedXml, "Restored Build")
-  runCallback("OnFrame")
+  rebuildOutput()
   if not ok then error(result) end
   return result
 end
