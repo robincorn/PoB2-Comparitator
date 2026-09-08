@@ -10,6 +10,10 @@ process.on('unhandledRejection', reason => {
   if (app.isReady()) dialog.showErrorBox('PoB2 Comparitator – Fehler', String(reason?.stack || reason));
 });
 
+app.on('render-process-gone', (_event, _webContents, details) => {
+  console.error(`[RENDERER GONE] reason=${details.reason}, exitCode=${details.exitCode}`);
+});
+
 app.on('window-all-closed', event => {
   event.preventDefault();
 });
