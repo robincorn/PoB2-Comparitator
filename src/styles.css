@@ -22,6 +22,19 @@ button.primary { background:rgba(67,108,151,.78); border-color:rgba(126,172,220,
 .icon-button { width:24px; height:24px; padding:0; border:0; background:transparent; color:#85858e; font-size:19px; line-height:20px; }
 .icon-button:hover { color:#fff; background:rgba(255,255,255,.08); }
 .control-dock > button:not(.icon-button) { width:100%; margin-top:6px; padding:8px 7px; font-size:9px; }
+.account-panel { margin-bottom:9px; padding:8px; border:1px solid rgba(255,255,255,.09); border-radius:8px; background:rgba(255,255,255,.035); }
+.panel-label { color:#777780; font-size:6px; font-weight:700; letter-spacing:.13em; }
+.account-name { overflow:hidden; margin-top:3px; text-overflow:ellipsis; white-space:nowrap; color:#e5e5e9; font-size:9px; font-weight:600; }
+.account-panel .compact { margin-top:7px; padding:6px; font-size:8px; }
+.character-row { display:grid; grid-template-columns:minmax(0,1fr) 27px; gap:5px; margin-top:5px; }
+.character-row select { min-width:0; height:27px; padding:0 5px; border:1px solid rgba(255,255,255,.12); border-radius:7px; background:rgba(12,12,17,.85); color:#d9d9df; font:inherit; font-size:8px; }
+.character-row select:disabled { opacity:.45; }
+.sync-button { width:27px; height:27px; padding:0; font-size:14px; }
+.sync-status { min-height:10px; margin-top:5px; color:#777780; font-size:7px; line-height:9px; }
+.sync-status.syncing { color:#b8cce1; }
+.sync-status.synced { color:#a9e6b9; }
+.sync-status.offline { color:#d6c48f; }
+.sync-status.error { color:#efaaaa; }
 .dock-divider { height:1px; margin:12px 0; background:rgba(255,255,255,.10); }
 .build-mini span { display:block; color:#777780; font-size:7px; letter-spacing:.13em; }
 .build-mini strong { display:block; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#dedee3; font-size:9px; font-weight:600; }
