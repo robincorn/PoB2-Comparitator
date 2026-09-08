@@ -45,11 +45,10 @@ const child = spawn(luaJit, [bridgeScript], {
 
 let buffer = '';
 let responseReceived = false;
-let childExited = false;
 const timeout = setTimeout(() => {
   if (!responseReceived) {
     child.kill();
-    fail('Bridge did not answer within 15 seconds. Check [PoB stdout]/[PoB stderr] above for the last startup message.');
+    fail('Bridge did not answer within 15 seconds. Check [PoB stderr] above for the last startup message.');
   }
 }, 15000);
 
@@ -93,7 +92,6 @@ child.on('error', (error) => {
   }
 });
 child.on('exit', (code, signal) => {
-  childExited = true;
   if (!responseReceived) {
     clearTimeout(timeout);
     fail(`Bridge exited before answering (code=${code}, signal=${signal || 'none'})`);
