@@ -55,9 +55,10 @@ kbd { padding:2px 3px; border:1px solid rgba(255,255,255,.11); border-radius:3px
 .metric-label { color:#a0a0a8; font-size:9px; }
 .metric-value { display:block; margin-top:7px; color:#fff; font-size:27px; line-height:31px; font-weight:650; letter-spacing:-.02em; text-shadow:0 1px 10px rgba(0,0,0,.35); }
 .tile-foot { margin-top:14px; color:#73737c; font-size:7px; letter-spacing:.08em; text-transform:uppercase; }
-.skills-tile { grid-column:3; grid-row:1 / span 2; min-height:278px; }
-.skill-list { display:flex; flex-direction:column; gap:5px; }
+.skills-tile { grid-column:3; grid-row:1 / span 2; min-height:278px; max-height:calc(100vh - 84px); overflow:hidden; }
+.skill-list { display:flex; flex-direction:column; gap:5px; max-height:calc(100vh - 150px); overflow-y:auto; padding-right:3px; }
 .skill-row { display:grid; grid-template-columns:minmax(0,1fr) 82px 82px; gap:8px; align-items:center; min-height:40px; padding:7px 8px; border:1px solid rgba(255,255,255,.065); border-radius:7px; background:rgba(255,255,255,.042); }
+.support-row { border-style:dashed; }
 .skill-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#e5e5e9; font-size:9px; font-weight:600; }
 .skill-row > div:not(.skill-name) { text-align:right; }
 .skill-row span { display:block; color:#85858e; font-size:7px; letter-spacing:.05em; }
