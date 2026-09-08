@@ -16,10 +16,14 @@
       <button id="load" class="primary">Load XML Build</button>
       <button id="paste" class="primary">Load PoB2 Clipboard</button>
       <button id="calculate">Recalculate</button>
+      <button id="compare" class="compare-button">Compare Clipboard Item</button>
       <div class="dock-divider"></div>
       <div class="build-mini"><span>BUILD</span><strong id="file">No build loaded</strong></div>
       <div id="status" class="status">Connecting to PoB2…</div>
-      <div class="dock-help"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd><span>toggle overlay</span></div>
+      <div class="dock-help">
+        <div><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd><span>toggle overlay</span></div>
+        <div><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd><span>compare clipboard item</span></div>
+      </div>
     </aside>
 
     <main class="dashboard">
@@ -51,7 +55,7 @@
           <div class="compare-row"><span>Effective Max Hit</span><strong id="maxhit-base">—</strong><strong id="maxhit-changed">—</strong><em id="maxhit-delta">—</em></div>
         </div>
         <div id="skill-comparisons" class="skill-comparisons"></div>
-        <div class="comparison-hint">Copy another item from PoE to compare automatically.</div>
+        <div class="comparison-hint">Copy an item in PoE, then press Ctrl + Shift + C.</div>
       </section>
     </main>
 
