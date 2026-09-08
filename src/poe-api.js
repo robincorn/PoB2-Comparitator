@@ -63,12 +63,22 @@ class PoeApiClient {
     return Boolean(this.auth?.accessToken && this.auth?.refreshToken);
   }
 
+  #normalizeToken(token) {
+    return {
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token,
+      expiresAt: Date.now() + Number(token.expires_in || 0) * 1000,
+      username: token.username || this.auth?.username || null,
+      subject: token.sub || this.auth?.subject || null,
+    };
+  }
+
   async authenticate() {
     const codeVerifier = randomToken(32);
     const codeChallenge = base64Url(crypto.createHash('sha256').update(codeVerifier).digest());
     const state = randomToken(24);
 
-    const result = await new Promise((resolve, reject) => {
+    const { code, redirectUri } = await new Promise((resolve, reject) => {
       const server = http.createServer((req, res) => {
         const requestUrl = new URL(req.url, 'http://127.0.0.1');
         if (requestUrl.pathname !== '/callback') {
@@ -85,25 +95,25 @@ class PoeApiClient {
         if (returnedState !== state) return reject(new Error('OAuth state mismatch'));
         if (error) return reject(new Error(`Path of Exile authorization failed: ${error}`));
         if (!code) return reject(new Error('Path of Exile did not return an authorization code'));
-        resolve(code);
+        resolve({ code, redirectUri: `http://localhost:${port}` });
       });
 
+      let port;
       server.on('error', reject);
       server.listen(0, '127.0.0.1', async () => {
         const address = server.address();
-        const port = typeof address === 'object' && address ? address.port : null;
+        port = typeof address === 'object' && address ? address.port : null;
         if (!port) {
           server.close();
           reject(new Error('Could not allocate OAuth callback port'));
           return;
         }
-        const redirectUri = `http://localhost:${port}`;
         const authUrl = new URL('/oauth/authorize', AUTH_BASE);
         authUrl.searchParams.set('client_id', CLIENT_ID);
         authUrl.searchParams.set('response_type', 'code');
         authUrl.searchParams.set('scope', SCOPES.join(' '));
         authUrl.searchParams.set('state', state);
-        authUrl.searchParams.set('redirect_uri', redirectUri);
+        authUrl.searchParams.set('redirect_uri', `http://localhost:${port}`);
         authUrl.searchParams.set('code_challenge', codeChallenge);
         authUrl.searchParams.set('code_challenge_method', 'S256');
         try {
@@ -115,19 +125,20 @@ class PoeApiClient {
       });
     });
 
-    const address = await new Promise((resolve, reject) => {
-      const probe = http.createServer();
-      probe.on('error', reject);
-      probe.listen(0, '127.0.0.1', () => {
-        const port = probe.address().port;
-        probe.close(() => resolve(port));
-      });
+    const body = formEncode({
+      client_id: CLIENT_ID,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      scope: SCOPES.join(' '),
+      code_verifier: codeVerifier,
     });
-    // The OAuth callback server has already closed, so its port is not available here.
-    // PoE's token endpoint only requires the exact redirect URI used during authorization;
-    // the callback server below therefore repeats the authorization flow with a stable port.
-    void address;
-    throw new Error('OAuth callback setup failed unexpectedly');
+    const token = await request(`${AUTH_BASE}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
+    }, body);
+    this.auth = this.#normalizeToken(token);
+    return this.auth;
   }
 
   async refresh() {
@@ -145,19 +156,9 @@ class PoeApiClient {
     return this.auth;
   }
 
-  #normalizeToken(token) {
-    return {
-      accessToken: token.access_token,
-      refreshToken: token.refresh_token,
-      expiresAt: Date.now() + Number(token.expires_in || 0) * 1000,
-      username: token.username || this.auth?.username || null,
-      subject: token.sub || this.auth?.subject || null,
-    };
-  }
-
   async ensureToken() {
     if (!this.isAuthenticated()) throw new Error('Not authenticated');
-    if (Date.now() + 30000 >= this.auth.expiresAt) await this.refresh();
+    if (!this.auth.expiresAt || Date.now() + 30000 >= this.auth.expiresAt) await this.refresh();
     return this.auth.accessToken;
   }
 
