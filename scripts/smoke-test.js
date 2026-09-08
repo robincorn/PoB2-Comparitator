@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const { decodeShareCode } = require('../src/pob-code');
 
 const root = path.resolve(__dirname, '..');
 const pobRoot = process.env.POB2_PATH || path.join(root, 'pob');
@@ -30,6 +31,15 @@ if (process.exitCode) process.exit();
 const shareCode = fs.readFileSync(fixturePath, 'utf8').trim();
 if (!shareCode) {
   fail(`PoB2 share-code fixture is empty: ${fixturePath}`);
+  process.exit();
+}
+
+let xml;
+try {
+  xml = decodeShareCode(shareCode);
+  console.log(`SHARE CODE DECODE PASSED: ${xml.length} bytes of XML`);
+} catch (error) {
+  fail(error.message);
   process.exit();
 }
 
@@ -70,7 +80,7 @@ function send(method, params = {}) {
   return id;
 }
 
-const statusId = send('getStatus');
+send('getStatus');
 
 function validateStats(stats, label) {
   const requiredStats = ['life', 'mana', 'energyShield', 'armour', 'evasion', 'totalDPS', 'averageDamage'];
@@ -117,18 +127,18 @@ child.stdout.on('data', (chunk) => {
         return;
       }
       console.log(`PoB2 READY: ${response.result.pobVersion}`);
-      phase = 'share-code import';
-      send('loadShareCode', { code: shareCode, name: 'Smoke Test Build' });
+      phase = 'build import';
+      send('loadBuild', { xml, name: 'Smoke Test Build' });
       return;
     }
 
-    if (method === 'loadShareCode') {
-      if (!validateStats(response.result, 'Share-code import')) {
+    if (method === 'loadBuild') {
+      if (!validateStats(response.result, 'Build import')) {
         clearTimeout(timeout);
         child.kill();
         return;
       }
-      console.log(`SHARE CODE IMPORT PASSED: ${JSON.stringify(response.result)}`);
+      console.log(`BUILD IMPORT PASSED: ${JSON.stringify(response.result)}`);
       phase = 'post-import calculation';
       send('getStats');
       return;
@@ -142,7 +152,7 @@ child.stdout.on('data', (chunk) => {
         return;
       }
       console.log(`POST-IMPORT CALCULATION PASSED: ${JSON.stringify(response.result)}`);
-      console.log('SMOKE TEST PASSED: PoB2 startup + share-code import + calculation bridge are working.');
+      console.log('SMOKE TEST PASSED: PoB2 startup + share-code decode + build import + calculation are working.');
       child.kill();
     }
   }
