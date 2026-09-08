@@ -34,12 +34,44 @@ local function stats()
   return { effectiveHitPool = output.TotalEHP, effectiveMaxHit = output.SecondMinimalMaximumHitTaken, totalDPS = output.TotalDPS, averageDamage = output.AverageDamage, speed = output.Speed }
 end
 
+local function makeSkillDpsMap(output)
+  local map = {}
+  for _, entry in ipairs(output.SkillDPS or {}) do
+    if entry.name then
+      map[entry.name] = map[entry.name] or {}
+      table.insert(map[entry.name], entry)
+    end
+  end
+  return map
+end
+
+local function takeSkillDps(map, name, used)
+  local candidates = map[name]
+  if not candidates then return nil end
+  for index, entry in ipairs(candidates) do
+    local key = name .. "#" .. tostring(index)
+    if not used[key] then
+      used[key] = true
+      return entry
+    end
+  end
+  return candidates[1]
+end
+
 local function skillStats()
   local calcsTab = build.calcsTab
   local savedSkillNumber = calcsTab.input.skill_number
   local savedMainSocketGroup = build.mainSocketGroup
   local savedSelections = {}
   local result = {}
+
+  -- This is the authoritative PoB2 per-skill DPS result. PoB2's own sidebar
+  -- gets SkillDPS from calcFullDPS; TotalDPS is only the currently selected
+  -- skill's calculation output and is therefore not suitable as the overview
+  -- value for every skill in the build.
+  local initialOutput = calcsTab.mainOutput or {}
+  local skillDpsMap = makeSkillDpsMap(initialOutput)
+  local usedDpsEntries = {}
 
   for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
     savedSelections[index] = {
@@ -48,35 +80,38 @@ local function skillStats()
     }
   end
 
-  -- Follow PoB2's own TestSkills selection helper exactly: the UI skill list is
-  -- used for the index, both selection fields are synchronized, buildFlag is
-  -- set, and OnFrame performs the calculation. Do not force BuildOutput or
-  -- modFlag here; that would add behavior not used by PoB2's normal selection.
   for groupIndex, group in ipairs(build.skillsTab.socketGroupList or {}) do
     local skillList = group.displaySkillList or {}
     for skillIndex, activeSkill in ipairs(skillList) do
       local grantedEffect = activeSkill.activeEffect and activeSkill.activeEffect.grantedEffect
       if grantedEffect then
+        local name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill"
+        local dpsEntry = takeSkillDps(skillDpsMap, name, usedDpsEntries)
+
+        -- Select the skill only to obtain its normal PoB2 detail output such as
+        -- AverageDamage. The DPS value itself comes from SkillDPS above.
         build.mainSocketGroup = groupIndex
         calcsTab.input.skill_number = groupIndex
         group.mainActiveSkill = skillIndex
         group.mainActiveSkillCalcs = skillIndex
         build.buildFlag = true
-
         runCallback("OnFrame")
 
         local output = calcsTab.mainOutput or {}
         table.insert(result, {
-          name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill",
+          name = name,
           group = groupIndex,
           skillIndex = skillIndex,
           support = false,
-          fullDPS = output.FullDPS or 0,
-          combinedDPS = output.CombinedDPS or 0,
+          fullDPS = dpsEntry and dpsEntry.dps or 0,
+          combinedDPS = dpsEntry and dpsEntry.dps or 0,
           hitDPS = output.TotalDPS or 0,
           averageDamage = output.AverageDamage or 0,
           speed = output.Speed,
-          dotDPS = output.TotalDotDPS or output.TotalDot or 0
+          dotDPS = output.TotalDotDPS or output.TotalDot or 0,
+          count = dpsEntry and dpsEntry.count or 1,
+          trigger = dpsEntry and dpsEntry.trigger or nil,
+          source = dpsEntry and dpsEntry.source or nil
         })
       end
     end
