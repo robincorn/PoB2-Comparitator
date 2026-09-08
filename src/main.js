@@ -28,16 +28,11 @@ function setWindowInteractive(interactive) {
   mainWindow.setIgnoreMouseEvents(!interactive, { forward: true });
 }
 
-function toggleOverlay() {
+function hideOverlay() {
   if (!mainWindow) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  if (mainWindow.isVisible()) {
-    mainWindow.hide();
-  } else {
-    mainWindow.showInactive();
-    setWindowInteractive(false);
-    mainWindow.webContents.send('overlay-opened');
-  }
+  mainWindow.hide();
+  mainWindow.webContents.send('overlay-closed');
+  setWindowInteractive(false);
 }
 
 function showOverlay() {
@@ -46,6 +41,12 @@ function showOverlay() {
   mainWindow.showInactive();
   setWindowInteractive(false);
   mainWindow.webContents.send('overlay-opened');
+}
+
+function toggleOverlay() {
+  if (!mainWindow) return;
+  if (mainWindow.isVisible()) hideOverlay();
+  else showOverlay();
 }
 
 function createTray() {
@@ -64,16 +65,13 @@ function createWindow() {
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const { x, y, width, height } = display.bounds;
   mainWindow = new BrowserWindow({
-    x,
-    y,
-    width,
-    height,
+    x, y, width, height,
     frame: false,
     transparent: true,
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
-    show: true,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -85,7 +83,7 @@ function createWindow() {
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
-      mainWindow.hide();
+      hideOverlay();
     }
   });
   mainWindow.on('closed', () => { mainWindow = null; });
@@ -227,7 +225,7 @@ ipcMain.handle('bridge-status', async () => {
   return callBridge('getStatus');
 });
 
-ipcMain.handle('hide-overlay', () => { mainWindow?.hide(); return { ok: true }; });
+ipcMain.handle('hide-overlay', () => { hideOverlay(); return { ok: true }; });
 ipcMain.handle('set-ignore-mouse-events', (_event, ignore) => { setWindowInteractive(!ignore); return { ok: true }; });
 
 ipcMain.handle('select-build', async () => {
