@@ -12,7 +12,7 @@ const API_BASE = 'https://api.pathofexile.com';
 const REDIRECT_HOST = '127.0.0.1';
 const REDIRECT_PORT = 47831;
 const REDIRECT_URI = `http://${REDIRECT_HOST}:${REDIRECT_PORT}/callback`;
-const SCOPES = ['account:profile', 'account:leagues', 'account:characters'];
+const SCOPES = ['account:characters'];
 
 function requireClientId() {
   if (!CLIENT_ID) {
