@@ -3,10 +3,22 @@ const https = require('https');
 const crypto = require('crypto');
 const { shell } = require('electron');
 
-const CLIENT_ID = process.env.POE_CLIENT_ID || 'pob';
+const CLIENT_ID = process.env.POE_CLIENT_ID || '';
+const CLIENT_VERSION = process.env.POE_CLIENT_VERSION || '0.1.0';
+const CONTACT = process.env.POE_CONTACT || 'configure-contact@example.invalid';
+const USER_AGENT = `OAuth ${CLIENT_ID || 'unconfigured'}/${CLIENT_VERSION} (contact: ${CONTACT}) PoB2-Comparitator`;
 const AUTH_BASE = 'https://www.pathofexile.com';
 const API_BASE = 'https://api.pathofexile.com';
+const REDIRECT_HOST = '127.0.0.1';
+const REDIRECT_PORT = 47831;
+const REDIRECT_URI = `http://${REDIRECT_HOST}:${REDIRECT_PORT}/callback`;
 const SCOPES = ['account:profile', 'account:leagues', 'account:characters'];
+
+function requireClientId() {
+  if (!CLIENT_ID) {
+    throw new Error('PoE OAuth is not configured. Set POE_CLIENT_ID to our registered public client ID. The PoB client ID is intentionally not supported.');
+  }
+}
 
 function base64Url(buffer) {
   return Buffer.from(buffer).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
@@ -25,7 +37,7 @@ function request(url, options = {}, body = null) {
       port: target.port || 443,
       path: `${target.pathname}${target.search}`,
       method: options.method || 'GET',
-      headers: options.headers || {},
+      headers: { 'User-Agent': USER_AGENT, ...(options.headers || {}) },
     }, (res) => {
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
@@ -34,7 +46,7 @@ function request(url, options = {}, body = null) {
         let parsed = null;
         try { parsed = text ? JSON.parse(text) : null; } catch { /* non-JSON response */ }
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          const detail = parsed?.error_description || parsed?.error || text || `HTTP ${res.statusCode}`;
+          const detail = parsed?.error_description || parsed?.error?.message || parsed?.error || text || `HTTP ${res.statusCode}`;
           reject(new Error(`${res.statusCode}: ${detail}`));
           return;
         }
@@ -74,21 +86,21 @@ class PoeApiClient {
   }
 
   async authenticate() {
+    requireClientId();
     const codeVerifier = randomToken(32);
     const codeChallenge = base64Url(crypto.createHash('sha256').update(codeVerifier).digest());
     const state = randomToken(24);
 
-    const { code, redirectUri } = await new Promise((resolve, reject) => {
+    const { code } = await new Promise((resolve, reject) => {
       let settled = false;
-      let port = null;
       const finish = (fn, value) => {
         if (settled) return;
         settled = true;
         fn(value);
       };
       const server = http.createServer((req, res) => {
-        const requestUrl = new URL(req.url, 'http://127.0.0.1');
-        if (requestUrl.pathname !== '/' && requestUrl.pathname !== '/callback') {
+        const requestUrl = new URL(req.url, REDIRECT_URI);
+        if (requestUrl.pathname !== '/callback') {
           res.writeHead(404);
           res.end('Not found');
           return;
@@ -102,25 +114,23 @@ class PoeApiClient {
         if (returnedState !== state) return finish(reject, new Error('OAuth state mismatch'));
         if (error) return finish(reject, new Error(`Path of Exile authorization failed: ${error}`));
         if (!code) return finish(reject, new Error('Path of Exile did not return an authorization code'));
-        finish(resolve, { code, redirectUri: `http://localhost:${port}` });
+        finish(resolve, { code });
       });
 
-      server.on('error', (error) => finish(reject, error));
-      server.listen(0, '127.0.0.1', async () => {
-        const address = server.address();
-        port = typeof address === 'object' && address ? address.port : null;
-        if (!port) {
-          server.close();
-          finish(reject, new Error('Could not allocate OAuth callback port'));
-          return;
+      server.on('error', (error) => {
+        if (error.code === 'EADDRINUSE') {
+          finish(reject, new Error(`OAuth callback port ${REDIRECT_PORT} is already in use.`));
+        } else {
+          finish(reject, error);
         }
-        const redirectUri = `http://localhost:${port}`;
+      });
+      server.listen(REDIRECT_PORT, REDIRECT_HOST, async () => {
         const authUrl = new URL('/oauth/authorize', AUTH_BASE);
         authUrl.searchParams.set('client_id', CLIENT_ID);
         authUrl.searchParams.set('response_type', 'code');
         authUrl.searchParams.set('scope', SCOPES.join(' '));
         authUrl.searchParams.set('state', state);
-        authUrl.searchParams.set('redirect_uri', redirectUri);
+        authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
         authUrl.searchParams.set('code_challenge', codeChallenge);
         authUrl.searchParams.set('code_challenge_method', 'S256');
         try {
@@ -136,7 +146,7 @@ class PoeApiClient {
       client_id: CLIENT_ID,
       grant_type: 'authorization_code',
       code,
-      redirect_uri: redirectUri,
+      redirect_uri: REDIRECT_URI,
       scope: SCOPES.join(' '),
       code_verifier: codeVerifier,
     });
@@ -149,6 +159,7 @@ class PoeApiClient {
   }
 
   async refresh() {
+    requireClientId();
     if (!this.auth?.refreshToken) throw new Error('Not authenticated');
     const body = formEncode({
       client_id: CLIENT_ID,
@@ -193,4 +204,4 @@ class PoeApiClient {
   }
 }
 
-module.exports = { PoeApiClient, CLIENT_ID, SCOPES };
+module.exports = { PoeApiClient, CLIENT_ID, SCOPES, REDIRECT_URI };
