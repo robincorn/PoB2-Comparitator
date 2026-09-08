@@ -26,15 +26,11 @@ for (const required of [
 if (process.exitCode) process.exit();
 
 const env = { ...process.env };
-
-// PoB2 is started with cwd=<repo>\\pob\\src, but its Lua modules live under
-// <repo>\\pob\\runtime\\lua. Use absolute paths so this stays correct on Windows.
 env.LUA_PATH = [
   path.join(pobRuntimeLua, '?.lua'),
   path.join(pobRuntimeLua, '?', 'init.lua'),
   env.LUA_PATH || '',
 ].filter(Boolean).join(';');
-
 env.LUA_CPATH = [
   path.join(pobRoot, 'runtime', '?.dll'),
   env.LUA_CPATH || '',
@@ -63,13 +59,15 @@ child.stdout.on('data', (chunk) => {
   buffer = lines.pop();
   for (const line of lines) {
     if (!line.trim()) continue;
+
     let response;
     try {
       response = JSON.parse(line);
     } catch {
-      fail(`Invalid JSON from bridge: ${line}`);
-      child.kill();
-      return;
+      // PoB itself writes startup/progress messages to stdout. They are not
+      // bridge responses and must not make an otherwise valid smoke test fail.
+      process.stdout.write(`[PoB stdout] ${line}\n`);
+      continue;
     }
 
     if (response.id !== 1) continue;
