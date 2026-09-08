@@ -79,9 +79,16 @@ class PoeApiClient {
     const state = randomToken(24);
 
     const { code, redirectUri } = await new Promise((resolve, reject) => {
+      let settled = false;
+      let port = null;
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        fn(value);
+      };
       const server = http.createServer((req, res) => {
         const requestUrl = new URL(req.url, 'http://127.0.0.1');
-        if (requestUrl.pathname !== '/callback') {
+        if (requestUrl.pathname !== '/' && requestUrl.pathname !== '/callback') {
           res.writeHead(404);
           res.end('Not found');
           return;
@@ -92,35 +99,35 @@ class PoeApiClient {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end('<!doctype html><title>PoB2 Comparitator</title><p>Authorization complete. You can close this window.</p>');
         server.close();
-        if (returnedState !== state) return reject(new Error('OAuth state mismatch'));
-        if (error) return reject(new Error(`Path of Exile authorization failed: ${error}`));
-        if (!code) return reject(new Error('Path of Exile did not return an authorization code'));
-        resolve({ code, redirectUri: `http://localhost:${port}` });
+        if (returnedState !== state) return finish(reject, new Error('OAuth state mismatch'));
+        if (error) return finish(reject, new Error(`Path of Exile authorization failed: ${error}`));
+        if (!code) return finish(reject, new Error('Path of Exile did not return an authorization code'));
+        finish(resolve, { code, redirectUri: `http://localhost:${port}` });
       });
 
-      let port;
-      server.on('error', reject);
+      server.on('error', (error) => finish(reject, error));
       server.listen(0, '127.0.0.1', async () => {
         const address = server.address();
         port = typeof address === 'object' && address ? address.port : null;
         if (!port) {
           server.close();
-          reject(new Error('Could not allocate OAuth callback port'));
+          finish(reject, new Error('Could not allocate OAuth callback port'));
           return;
         }
+        const redirectUri = `http://localhost:${port}`;
         const authUrl = new URL('/oauth/authorize', AUTH_BASE);
         authUrl.searchParams.set('client_id', CLIENT_ID);
         authUrl.searchParams.set('response_type', 'code');
         authUrl.searchParams.set('scope', SCOPES.join(' '));
         authUrl.searchParams.set('state', state);
-        authUrl.searchParams.set('redirect_uri', `http://localhost:${port}`);
+        authUrl.searchParams.set('redirect_uri', redirectUri);
         authUrl.searchParams.set('code_challenge', codeChallenge);
         authUrl.searchParams.set('code_challenge_method', 'S256');
         try {
           await shell.openExternal(authUrl.toString());
         } catch (error) {
           server.close();
-          reject(new Error(`Could not open Path of Exile authorization page: ${error.message}`));
+          finish(reject, new Error(`Could not open Path of Exile authorization page: ${error.message}`));
         }
       });
     });
