@@ -8,6 +8,7 @@ let mainWindow;
 let tray;
 let bridge;
 let isQuitting = false;
+let overlayOpen = false;
 let requestId = 0;
 let buildReady = false;
 let comparisonBusy = false;
@@ -23,27 +24,40 @@ function createTrayIcon() {
   return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
 }
 function setWindowInteractive(interactive) { if (mainWindow) mainWindow.setIgnoreMouseEvents(!interactive, { forward: true }); }
-function hideOverlay() { if (mainWindow) { mainWindow.webContents.send('overlay-closed'); setWindowInteractive(false); } }
+function hideOverlay() {
+  overlayOpen = false;
+  if (mainWindow) { mainWindow.webContents.send('overlay-closed'); setWindowInteractive(false); }
+}
 function showOverlay() {
   if (!mainWindow) return;
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  mainWindow.setBounds(display.bounds, false); mainWindow.showInactive(); setWindowInteractive(false); mainWindow.webContents.send('overlay-opened');
+  overlayOpen = true;
+  mainWindow.setBounds(display.bounds, false);
+  mainWindow.showInactive();
+  setWindowInteractive(false);
+  mainWindow.webContents.send('overlay-opened');
 }
-function toggleOverlay() {
-  if (!mainWindow) return;
-  mainWindow.webContents.executeJavaScript('document.body.classList.contains("overlay-open")', true).catch(() => false)
-    .then(open => open ? hideOverlay() : showOverlay());
-}
+function toggleOverlay() { overlayOpen ? hideOverlay() : showOverlay(); }
 function createTray() {
-  tray = new Tray(createTrayIcon()); tray.setToolTip('PoB2 Comparitator');
-  tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Show / Hide Overlay', click: toggleOverlay }, { type: 'separator' }, { label: 'Quit PoB2 Comparitator', click: () => { isQuitting = true; app.quit(); } }]));
-  tray.on('click', toggleOverlay); tray.on('double-click', showOverlay);
+  tray = new Tray(createTrayIcon());
+  tray.setToolTip('PoB2 Comparitator');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Show / Hide Overlay', click: toggleOverlay },
+    { type: 'separator' },
+    { label: 'Quit PoB2 Comparitator', click: () => { isQuitting = true; app.quit(); } }
+  ]));
+  tray.on('click', toggleOverlay);
+  tray.on('double-click', showOverlay);
 }
 function createWindow() {
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   mainWindow = new BrowserWindow({ x: display.bounds.x, y: display.bounds.y, width: display.bounds.width, height: display.bounds.height, frame: false, transparent: true, resizable: false, alwaysOnTop: true, skipTaskbar: true, show: true, webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false } });
-  mainWindow.setAlwaysOnTop(true, 'floating'); mainWindow.loadFile(path.join(__dirname, 'index.html')); mainWindow.webContents.once('did-finish-load', hideOverlay);
-  mainWindow.on('close', event => { if (!isQuitting) { event.preventDefault(); hideOverlay(); } }); mainWindow.on('closed', () => { mainWindow = null; }); setWindowInteractive(false);
+  mainWindow.setAlwaysOnTop(true, 'floating');
+  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.webContents.once('did-finish-load', hideOverlay);
+  mainWindow.on('close', event => { if (!isQuitting) { event.preventDefault(); hideOverlay(); } });
+  mainWindow.on('closed', () => { mainWindow = null; });
+  setWindowInteractive(false);
 }
 function findLuaJit(root) { if (process.env.LUAJIT) return process.env.LUAJIT; const local = path.join(root, '.tools', 'luajit', 'luajit.exe'); return fs.existsSync(local) ? local : (process.platform === 'win32' ? 'luajit.exe' : 'luajit'); }
 function startBridge() {
@@ -69,15 +83,61 @@ async function compareClipboardItem() {
   try { const ready = await ensureBridge(); if (!ready.ok) return ready; const response = await callBridge('compareItem', { itemText }); if (response?.ok) mainWindow?.webContents.send('item-comparison', response.result); else mainWindow?.webContents.send('item-comparison-error', { error: response?.error || 'Item comparison failed.' }); return response; } finally { comparisonBusy = false; }
 }
 function userPathCandidates() {
-  const home = process.env.USERPROFILE || process.env.HOME || ''; const docs = path.join(home, 'Documents'); const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-  return [path.join(docs, 'Path of Building (PoE2)', 'Builds'), path.join(appData, 'Path of Building (PoE2)', 'Builds'), path.join(docs, 'Path of Building', 'Builds'), path.join(appData, 'Path of Building Community', 'Builds'), path.join(appData, 'Path of Building', 'Builds')];
+  const home = process.env.USERPROFILE || process.env.HOME || '';
+  const docs = app.getPath('documents');
+  const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+  const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+  return [
+    path.join(docs, 'Path of Building (PoE2)', 'Builds'),
+    path.join(docs, 'Path of Building', 'Builds'),
+    path.join(appData, 'Path of Building (PoE2)', 'Builds'),
+    path.join(appData, 'Path of Building Community', 'Builds'),
+    path.join(appData, 'Path of Building', 'Builds'),
+    path.join(localAppData, 'Path of Building (PoE2)', 'Builds'),
+    path.join(localAppData, 'Path of Building', 'Builds')
+  ];
 }
 function findBuildDirectory() { return userPathCandidates().find(dir => fs.existsSync(dir)) || userPathCandidates()[0]; }
 function installedPobCandidates() {
-  const home = process.env.USERPROFILE || ''; const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming'); const pf = process.env.ProgramFiles || 'C:\\Program Files'; const pfx86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
-  return [process.env.POB_INSTALLED_PATH, path.join(appData, 'Path of Building (PoE2)', 'runtime', 'Path of Building-PoE2.exe'), path.join(appData, 'Path of Building (PoE2)', 'Path of Building-PoE2.exe'), path.join(pf, 'Path of Building (PoE2)', 'runtime', 'Path of Building-PoE2.exe'), path.join(pfx86, 'Path of Building (PoE2)', 'runtime', 'Path of Building-PoE2.exe'), path.join(appData, 'Path of Building Community', 'Path of Building.exe'), path.join(pf, 'Path of Building Community', 'Path of Building.exe')].filter(Boolean);
+  const home = process.env.USERPROFILE || '';
+  const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+  const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+  const pf = process.env.ProgramFiles || 'C:\\Program Files';
+  const pfx86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  return [
+    process.env.POB_INSTALLED_PATH,
+    path.join(appData, 'Path of Building (PoE2)', 'Path of Building-PoE2.exe'),
+    path.join(appData, 'Path of Building (PoE2)', 'runtime', 'Path of Building-PoE2.exe'),
+    path.join(localAppData, 'Path of Building (PoE2)', 'Path of Building-PoE2.exe'),
+    path.join(localAppData, 'Path of Building (PoE2)', 'runtime', 'Path of Building-PoE2.exe'),
+    path.join(pf, 'Path of Building (PoE2)', 'Path of Building-PoE2.exe'),
+    path.join(pf, 'Path of Building (PoE2)', 'runtime', 'Path of Building-PoE2.exe'),
+    path.join(pfx86, 'Path of Building (PoE2)', 'Path of Building-PoE2.exe'),
+    path.join(pfx86, 'Path of Building (PoE2)', 'runtime', 'Path of Building-PoE2.exe'),
+    path.join(appData, 'Path of Building Community', 'Path of Building.exe'),
+    path.join(pf, 'Path of Building Community', 'Path of Building.exe'),
+    path.join(pfx86, 'Path of Building Community', 'Path of Building.exe')
+  ].filter(Boolean);
 }
-function findInstalledPob() { return installedPobCandidates().find(file => fs.existsSync(file)) || null; }
+function findInstalledPob() {
+  const direct = installedPobCandidates().find(file => fs.existsSync(file));
+  if (direct) return direct;
+  const roots = [process.env.APPDATA, process.env.LOCALAPPDATA, process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean);
+  const wanted = new Set(['Path of Building-PoE2.exe', 'Path of Building.exe']);
+  const queue = roots.map(root => ({ dir: root, depth: 0 }));
+  while (queue.length) {
+    const { dir, depth } = queue.shift();
+    if (depth > 5) continue;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isFile() && wanted.has(entry.name)) return full;
+      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') queue.push({ dir: full, depth: depth + 1 });
+    }
+  }
+  return null;
+}
 function snapshotBuildFiles(dir) { const out = new Map(); if (!fs.existsSync(dir)) return out; for (const name of fs.readdirSync(dir)) { if (!name.toLowerCase().endsWith('.xml')) continue; const file = path.join(dir, name); try { const st = fs.statSync(file); out.set(file, st.mtimeMs); } catch {} } return out; }
 function newestChangedBuild(dir, before) { let best = null; if (fs.existsSync(dir)) for (const name of fs.readdirSync(dir)) { if (!name.toLowerCase().endsWith('.xml')) continue; const file = path.join(dir, name); try { const m = fs.statSync(file).mtimeMs; const old = before.get(file); if (old === undefined || m > old + 500) best = !best || m > best.mtime ? { file, mtime: m } : best; } catch {} } return best?.file || null; }
 function stopLocalSync(reason = 'cancelled') { if (!localSync) return; clearInterval(localSync.timer); localSync = null; mainWindow?.webContents.send('local-pob-status', { state: reason }); }
