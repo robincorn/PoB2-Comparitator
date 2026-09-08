@@ -58,6 +58,29 @@ local function takeSkillDps(map, name, used)
   return candidates[1]
 end
 
+local function getGemGrantedEffect(gem)
+  if not gem then return nil end
+  if gem.gemData and gem.gemData.grantedEffect then return gem.gemData.grantedEffect end
+  return gem.grantedEffect
+end
+
+local function isSupportGem(gem)
+  local grantedEffect = getGemGrantedEffect(gem)
+  return grantedEffect and grantedEffect.support == true
+end
+
+local function groupIsActive(group, activeWeaponSet)
+  if not group or group.enabled == false then return false end
+
+  -- Do not trust a stale slotEnabled value. Recompute the exact condition used
+  -- by PoB2's CalcSetup from the socketed item and active weapon set.
+  local slot = group.slot and build.itemsTab.slots[group.slot]
+  if slot and slot.weaponSet and slot.weaponSet ~= activeWeaponSet then
+    return false
+  end
+  return true
+end
+
 local function skillStats()
   local calcsTab = build.calcsTab
   local savedSkillNumber = calcsTab.input.skill_number
@@ -65,13 +88,12 @@ local function skillStats()
   local savedSelections = {}
   local result = {}
 
-  -- This is the authoritative PoB2 per-skill DPS result. PoB2's own sidebar
-  -- gets SkillDPS from calcFullDPS; TotalDPS is only the currently selected
-  -- skill's calculation output and is therefore not suitable as the overview
-  -- value for every skill in the build.
+  -- SkillDPS is the authoritative PoB2 overview DPS list. It contains only
+  -- positive-DPS actors, so non-damaging skills legitimately have no entry.
   local initialOutput = calcsTab.mainOutput or {}
   local skillDpsMap = makeSkillDpsMap(initialOutput)
   local usedDpsEntries = {}
+  local activeWeaponSet = build.itemsTab.activeItemSet.useSecondWeaponSet and 2 or 1
 
   for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
     savedSelections[index] = {
@@ -81,20 +103,18 @@ local function skillStats()
   end
 
   for groupIndex, group in ipairs(build.skillsTab.socketGroupList or {}) do
-    -- PoB2 marks groups belonging to the inactive weapon set with slotEnabled=false.
-    -- The normal calculation setup uses this flag when building its skill lists;
-    -- including those groups here was the reason weapon-set skills were duplicated.
-    local groupVisible = group.slotEnabled and (group.enabled or groupIndex == build.mainSocketGroup)
-    if groupVisible then
+    if groupIsActive(group, activeWeaponSet) then
       local skillList = group.displaySkillList or {}
       for skillIndex, activeSkill in ipairs(skillList) do
-        local grantedEffect = activeSkill.activeEffect and activeSkill.activeEffect.grantedEffect
-        if grantedEffect then
-          local name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill"
+        local activeEffect = activeSkill.activeEffect
+        local grantedEffect = activeEffect and activeEffect.grantedEffect
+        if grantedEffect and activeEffect.srcInstance then
+          local name = grantedEffect.name or activeSkill.nameSpec or activeEffect.srcInstance.nameSpec or "Unknown Skill"
           local dpsEntry = takeSkillDps(skillDpsMap, name, usedDpsEntries)
 
           -- Select the skill only to obtain its normal PoB2 detail output such as
-          -- AverageDamage. The DPS value itself comes from SkillDPS above.
+          -- AverageDamage. The overview DPS comes from SkillDPS; TotalDPS is used
+          -- only as a fallback when the authoritative entry cannot be matched.
           build.mainSocketGroup = groupIndex
           calcsTab.input.skill_number = groupIndex
           group.mainActiveSkill = skillIndex
@@ -103,27 +123,30 @@ local function skillStats()
           runCallback("OnFrame")
 
           local output = calcsTab.mainOutput or {}
+          local selectedDps = output.TotalDPS or 0
+          local overviewDps = dpsEntry and dpsEntry.dps or selectedDps
           table.insert(result, {
             name = name,
             group = groupIndex,
             skillIndex = skillIndex,
             support = false,
-            fullDPS = dpsEntry and dpsEntry.dps or 0,
-            combinedDPS = dpsEntry and dpsEntry.dps or 0,
-            hitDPS = output.TotalDPS or 0,
+            fullDPS = overviewDps,
+            combinedDPS = overviewDps,
+            hitDPS = selectedDps,
             averageDamage = output.AverageDamage or 0,
             speed = output.Speed,
             dotDPS = output.TotalDotDPS or output.TotalDot or 0,
             count = dpsEntry and dpsEntry.count or 1,
             trigger = dpsEntry and dpsEntry.trigger or nil,
-            source = dpsEntry and dpsEntry.source or nil
+            skillPart = dpsEntry and dpsEntry.skillPart or nil,
+            source = dpsEntry and dpsEntry.source or "selected-skill-fallback"
           })
         end
       end
 
       for _, gem in ipairs(group.gemList or {}) do
-        local grantedEffect = gem.grantedEffect
-        if grantedEffect and grantedEffect.support then
+        if gem.enabled ~= false and isSupportGem(gem) then
+          local grantedEffect = getGemGrantedEffect(gem)
           table.insert(result, {
             name = gem.nameSpec or grantedEffect.name or "Support Gem",
             group = groupIndex,
