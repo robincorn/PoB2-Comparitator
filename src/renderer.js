@@ -6,6 +6,15 @@ const compare = document.getElementById('compare');
 const pinnedKey = 'pob2-comparitator:pinned-tiles';
 const pinned = new Set(JSON.parse(localStorage.getItem(pinnedKey) || '[]'));
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function formatStat(value) {
   if (value === undefined || value === null || Number.isNaN(value)) return '—';
   if (typeof value !== 'number') return String(value);
@@ -34,14 +43,14 @@ function renderStats(stats) {
 function renderSkills(skills) {
   const container = document.getElementById('skills');
   if (!skills?.length) {
-    container.innerHTML = '<div class="empty-state">No damaging skills found.</div>';
+    container.innerHTML = '<div class="empty-state">No calculated active skills found.</div>';
     return;
   }
-  const sorted = [...skills].sort((a, b) => (b.combinedDPS || b.hitDPS || 0) - (a.combinedDPS || a.hitDPS || 0));
+  const sorted = [...skills].sort((a, b) => (b.combinedDPS || b.hitDPS || b.dotDPS || 0) - (a.combinedDPS || a.hitDPS || a.dotDPS || 0));
   container.innerHTML = sorted.slice(0, 6).map((skill) => `
     <div class="skill-row">
       <div class="skill-name" title="${escapeHtml(skill.name)}">${escapeHtml(skill.name)}</div>
-      <div><span>DPS</span><strong>${formatStat(skill.combinedDPS || skill.hitDPS)}</strong></div>
+      <div><span>DPS</span><strong>${formatStat(skill.combinedDPS || skill.hitDPS || skill.dotDPS)}</strong></div>
       <div><span>AVG</span><strong>${formatStat(skill.averageDamage)}</strong></div>
     </div>
   `).join('');
@@ -57,10 +66,10 @@ function renderComparison(result) {
   const base = result.base?.stats || {};
   const changed = result.changed?.stats || {};
   const rows = [
-    ['ehp', 'Effective Hit Pool', base.effectiveHitPool, changed.effectiveHitPool, result.delta?.effectiveHitPool],
-    ['maxhit', 'Effective Max Hit', base.effectiveMaxHit, changed.effectiveMaxHit, result.delta?.effectiveMaxHit],
+    ['ehp', base.effectiveHitPool, changed.effectiveHitPool, result.delta?.effectiveHitPool],
+    ['maxhit', base.effectiveMaxHit, changed.effectiveMaxHit, result.delta?.effectiveMaxHit],
   ];
-  for (const [key, _label, oldValue, newValue, delta] of rows) {
+  for (const [key, oldValue, newValue, delta] of rows) {
     document.getElementById(`${key}-base`).textContent = formatStat(oldValue);
     document.getElementById(`${key}-changed`).textContent = formatStat(newValue);
     const el = document.getElementById(`${key}-delta`);
@@ -70,7 +79,7 @@ function renderComparison(result) {
 
   const skillContainer = document.getElementById('skill-comparisons');
   const skillDeltas = [...(result.delta?.skills || [])]
-    .sort((a, b) => Math.abs(b.dpsDelta || 0) - Math.abs(a.dpsDelta || 0))
+    .sort((a, b) => Math.abs(b.dpsDelta || b.dotDelta || 0) - Math.abs(a.dpsDelta || a.dotDelta || 0))
     .slice(0, 4);
   skillContainer.innerHTML = skillDeltas.map((skill) => `
     <div class="skill-compare-row">
@@ -169,6 +178,12 @@ calculate.addEventListener('click', async () => {
   try { showResult(await window.pob.calculate()); } finally { calculate.disabled = false; calculate.textContent = 'Recalculate'; }
 });
 
+window.pob.onItemComparisonStart(() => {
+  document.getElementById('comparison').hidden = false;
+  document.getElementById('verdict').textContent = 'CALCULATING';
+  document.getElementById('verdict').className = 'verdict neutral';
+  document.getElementById('item-name').textContent = 'Comparing clipboard item…';
+});
 window.pob.onItemComparison(renderComparison);
 window.pob.onItemComparisonError((result) => showError(result?.error));
 window.pob.onOverlayOpened(() => setOverlayOpen(true));
