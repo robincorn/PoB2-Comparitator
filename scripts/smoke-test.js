@@ -45,12 +45,22 @@ const child = spawn(luaJit, [bridgeScript], {
 
 let buffer = '';
 let responseReceived = false;
+let nextId = 1;
+let phase = 'startup';
 const timeout = setTimeout(() => {
   if (!responseReceived) {
     child.kill();
-    fail('Bridge did not answer within 15 seconds. Check [PoB stderr] above for the last startup message.');
+    fail(`Bridge did not answer within 15 seconds during ${phase}. Check [PoB stderr] above for the last startup message.`);
   }
 }, 15000);
+
+function send(method, params = {}) {
+  const id = nextId++;
+  child.stdin.write(JSON.stringify({ id, method, params }) + '\n');
+  return id;
+}
+
+const statusId = send('getStatus');
 
 child.stdout.on('data', (chunk) => {
   buffer += chunk.toString();
@@ -68,19 +78,50 @@ child.stdout.on('data', (chunk) => {
       continue;
     }
 
-    if (response.id !== 1) continue;
-    responseReceived = true;
-    clearTimeout(timeout);
+    if (response.id === statusId) {
+      if (!response.ok) {
+        clearTimeout(timeout);
+        child.kill();
+        fail(response.error || 'Bridge returned a status error');
+        return;
+      }
+      if (response.result?.status !== 'ready') {
+        clearTimeout(timeout);
+        child.kill();
+        fail(`Unexpected status: ${JSON.stringify(response.result)}`);
+        return;
+      }
 
-    if (!response.ok) {
-      fail(response.error || 'Bridge returned an error');
-    } else if (response.result?.status !== 'ready') {
-      fail(`Unexpected status: ${JSON.stringify(response.result)}`);
-    } else {
-      console.log(`SMOKE TEST PASSED: PoB2 ${response.result.pobVersion} (${response.result.branch})`);
+      console.log(`PoB2 READY: ${response.result.pobVersion}`);
+      phase = 'calculation';
+      send('getStats');
+      return;
     }
 
-    child.kill();
+    if (response.id === statusId + 1) {
+      responseReceived = true;
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        child.kill();
+        fail(response.error || 'PoB2 calculation returned an error');
+        return;
+      }
+
+      const stats = response.result;
+      const requiredStats = ['life', 'mana', 'energyShield', 'armour', 'evasion', 'totalDPS', 'averageDamage'];
+      const missing = requiredStats.filter((key) => typeof stats?.[key] !== 'number');
+
+      if (missing.length) {
+        child.kill();
+        fail(`PoB2 calculation returned missing/non-numeric stats: ${missing.join(', ')}. Result: ${JSON.stringify(stats)}`);
+        return;
+      }
+
+      console.log(`CALCULATION PASSED: ${JSON.stringify(stats)}`);
+      console.log('SMOKE TEST PASSED: PoB2 headless startup + calculation bridge are working.');
+      child.kill();
+    }
   }
 });
 
@@ -94,8 +135,6 @@ child.on('error', (error) => {
 child.on('exit', (code, signal) => {
   if (!responseReceived) {
     clearTimeout(timeout);
-    fail(`Bridge exited before answering (code=${code}, signal=${signal || 'none'})`);
+    fail(`Bridge exited before completing smoke test (code=${code}, signal=${signal || 'none'})`);
   }
 });
-
-child.stdin.write(JSON.stringify({ id: 1, method: 'getStatus', params: {} }) + '\n');
