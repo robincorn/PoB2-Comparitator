@@ -14,6 +14,18 @@
         <div class="dock-brand"><img class="brand-mark" src="assets/icon-128.svg" alt="PoB2 Comparitator"><div><strong>PoB2</strong><span>COMPARITATOR</span></div></div>
         <button id="close" class="icon-button" title="Hide overlay">×</button>
       </div>
+
+      <section class="account-panel">
+        <div class="panel-label">PATH OF EXILE</div>
+        <div id="poe-account" class="account-name">Not connected</div>
+        <button id="poe-connect" class="primary compact">Connect Account</button>
+        <div class="character-row">
+          <select id="poe-character" disabled><option value="">Choose character…</option></select>
+          <button id="poe-sync" class="sync-button" disabled title="Sync selected character">↻</button>
+        </div>
+        <div id="poe-sync-status" class="sync-status">Use Character Sync to load your build automatically.</div>
+      </section>
+
       <button id="load" class="primary">Load XML Build</button>
       <button id="paste" class="primary">Load PoB2 Clipboard</button>
       <button id="calculate">Recalculate</button>
