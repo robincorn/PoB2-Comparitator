@@ -177,6 +177,16 @@ local function compareItem(itemText)
   return result
 end
 
+local function loadCharacter(character)
+  assert(type(character) == "table", "params.character is required")
+  assert(type(character.name) == "string" and character.name ~= "", "character.name is required")
+  assert(type(character.passives) == "table", "character.passives is required")
+  assert(type(character.equipment) == "table", "character.equipment is required")
+  loadBuildFromJSON(character, character)
+  rebuildOutput()
+  return buildSummary()
+end
+
 local function dispatch(request)
   if request.method == "getStatus" then
     return { status="ready", pobVersion=launch.versionNumber, branch=launch.versionBranch }
@@ -185,6 +195,9 @@ local function dispatch(request)
     assert(type(request.params.xml) == "string", "params.xml is required")
     loadBuildFromXML(request.params.xml, request.params.name or "Overlay Build")
     return buildSummary()
+  elseif request.method == "loadCharacter" then
+    assert(type(request.params) == "table", "params is required")
+    return loadCharacter(request.params.character)
   elseif request.method == "compareItem" then
     assert(type(request.params) == "table", "params is required")
     return compareItem(request.params.itemText)
