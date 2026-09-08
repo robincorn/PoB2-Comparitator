@@ -122,9 +122,10 @@ local function skillStats()
       end
 
       for _, gem in ipairs(group.gemList or {}) do
-        if gem.support then
+        local grantedEffect = gem.grantedEffect
+        if grantedEffect and grantedEffect.support then
           table.insert(result, {
-            name = gem.nameSpec or (gem.grantedEffect and gem.grantedEffect.name) or "Support Gem",
+            name = gem.nameSpec or grantedEffect.name or "Support Gem",
             group = groupIndex,
             support = true,
             fullDPS = 0,
