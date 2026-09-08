@@ -23,19 +23,24 @@
 
     <section class="build-header">
       <div><span class="eyebrow">CURRENT BUILD</span><div id="file" class="build-name">No build loaded</div></div>
-      <button id="paste" class="primary small">Load Clipboard</button>
+      <div class="build-actions">
+        <button id="paste" class="primary small">Load Clipboard</button>
+        <button id="calculate" class="small" disabled>Recalculate</button>
+      </div>
     </section>
 
     <section class="stats-card">
-      <div class="section-title"><span>Character Stats</span><button id="calculate" disabled>Recalculate</button></div>
-      <div id="stats" class="stats-grid">
-        <div class="stat"><span>Life</span><strong data-stat="life">—</strong></div>
-        <div class="stat"><span>Mana</span><strong data-stat="mana">—</strong></div>
-        <div class="stat"><span>Energy Shield</span><strong data-stat="energyShield">—</strong></div>
-        <div class="stat"><span>Armour</span><strong data-stat="armour">—</strong></div>
-        <div class="stat"><span>Evasion</span><strong data-stat="evasion">—</strong></div>
-        <div class="stat highlight"><span>Total DPS</span><strong data-stat="totalDPS">—</strong></div>
-        <div class="stat highlight"><span>Average Damage</span><strong data-stat="averageDamage">—</strong></div>
+      <div class="section-title"><span>PoB Summary</span><span class="coming">CALCULATED</span></div>
+      <div class="summary-grid">
+        <div class="summary-stat primary-stat"><span>Effective Hit Pool</span><strong data-stat="effectiveHitPool">—</strong></div>
+        <div class="summary-stat"><span>Effective Max Hit</span><strong data-stat="effectiveMaxHit">—</strong></div>
+      </div>
+    </section>
+
+    <section class="skills-card">
+      <div class="section-title"><span>Skills</span><span class="coming">PoB DPS</span></div>
+      <div id="skills" class="skill-list">
+        <div class="empty-state">Load a PoB2 build to see calculated skill damage.</div>
       </div>
     </section>
 
@@ -43,27 +48,23 @@
       <div class="section-title"><span>Item Comparison</span><span class="coming">PoB2</span></div>
       <div class="compare-action">
         <div class="compare-icon">+</div>
-        <div class="compare-copy"><strong>Copy an item from Path of Exile</strong><p>Copy the item with Ctrl+C, then compare it here. PoB2 determines the correct slot.</p></div>
+        <div class="compare-copy"><strong>Copy an item from Path of Exile</strong><p>PoB2 will equip it temporarily and calculate the real change to your build.</p></div>
         <button id="compare" class="primary compare-button" disabled>Compare Clipboard</button>
       </div>
       <div id="item-name" class="item-name">No item compared</div>
       <div id="item-slot" class="item-slot"></div>
       <div id="comparison-results" class="comparison-results" hidden>
-        <div class="compare-head"><span>BASE BUILD</span><span>WITH ITEM</span><span>CHANGE</span></div>
+        <div class="compare-head"><span>BASE</span><span>ITEM</span><span>CHANGE</span></div>
         <div class="delta-grid">
-          <div class="delta-row"><span>Life</span><strong id="delta-life-base">—</strong><strong id="delta-life-changed">—</strong><em id="delta-life">—</em></div>
-          <div class="delta-row"><span>Mana</span><strong id="delta-mana-base">—</strong><strong id="delta-mana-changed">—</strong><em id="delta-mana">—</em></div>
-          <div class="delta-row"><span>Energy Shield</span><strong id="delta-energyShield-base">—</strong><strong id="delta-energyShield-changed">—</strong><em id="delta-energyShield">—</em></div>
-          <div class="delta-row"><span>Armour</span><strong id="delta-armour-base">—</strong><strong id="delta-armour-changed">—</strong><em id="delta-armour">—</em></div>
-          <div class="delta-row"><span>Evasion</span><strong id="delta-evasion-base">—</strong><strong id="delta-evasion-changed">—</strong><em id="delta-evasion">—</em></div>
-          <div class="delta-row"><span>Total DPS</span><strong id="delta-totalDPS-base">—</strong><strong id="delta-totalDPS-changed">—</strong><em id="delta-totalDPS">—</em></div>
-          <div class="delta-row"><span>Average Damage</span><strong id="delta-averageDamage-base">—</strong><strong id="delta-averageDamage-changed">—</strong><em id="delta-averageDamage">—</em></div>
+          <div class="delta-row"><span>Effective Hit Pool</span><strong id="delta-effectiveHitPool-base">—</strong><strong id="delta-effectiveHitPool-changed">—</strong><em id="delta-effectiveHitPool">—</em></div>
+          <div class="delta-row"><span>Effective Max Hit</span><strong id="delta-effectiveMaxHit-base">—</strong><strong id="delta-effectiveMaxHit-changed">—</strong><em id="delta-effectiveMaxHit">—</em></div>
+          <div class="delta-row"><span>DPS</span><strong id="delta-totalDPS-base">—</strong><strong id="delta-totalDPS-changed">—</strong><em id="delta-totalDPS">—</em></div>
+          <div class="delta-row"><span>Average Hit</span><strong id="delta-averageDamage-base">—</strong><strong id="delta-averageDamage-changed">—</strong><em id="delta-averageDamage">—</em></div>
         </div>
       </div>
     </section>
 
     <div class="footer"><button id="load">Load XML Build</button><span>PoB2 engine · local calculation</span></div>
-    <pre id="output" hidden>Waiting for PoB2…</pre>
   </div>
   <script src="renderer.js"></script>
 </body>
