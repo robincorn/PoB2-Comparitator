@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -9,16 +9,29 @@ let bridge;
 let requestId = 0;
 const pending = new Map();
 const BRIDGE_TIMEOUT_MS = 30000;
+const TOGGLE_HOTKEY = 'CommandOrControl+Shift+Space';
+
+function toggleOverlay() {
+  if (!mainWindow) return;
+  if (mainWindow.isVisible()) {
+    mainWindow.hide();
+  } else {
+    mainWindow.showInactive();
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 420,
-    height: 360,
+    width: 520,
+    height: 520,
+    minWidth: 460,
+    minHeight: 420,
     frame: false,
     transparent: true,
-    resizable: false,
+    resizable: true,
     alwaysOnTop: true,
     skipTaskbar: true,
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -27,6 +40,10 @@ function createWindow() {
   });
   mainWindow.setAlwaysOnTop(true, 'floating');
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 }
 
 function findLuaJit(root) {
@@ -176,6 +193,17 @@ ipcMain.handle('calculate', async () => {
   return { ...response, stats: response.result };
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+
+  if (!globalShortcut.register(TOGGLE_HOTKEY, toggleOverlay)) {
+    console.error(`Failed to register overlay hotkey: ${TOGGLE_HOTKEY}`);
+  }
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  bridge?.kill();
+});
+
 app.on('window-all-closed', () => app.quit());
-app.on('before-quit', () => bridge?.kill());
