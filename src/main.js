@@ -171,7 +171,10 @@ ipcMain.handle('load-clipboard-build', async () => {
   return { ...response, stats: response.result };
 });
 
-ipcMain.handle('calculate', () => callBridge('getStats'));
+ipcMain.handle('calculate', async () => {
+  const response = await callBridge('getStats');
+  return { ...response, stats: response.result };
+});
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());
