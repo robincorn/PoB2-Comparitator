@@ -10,13 +10,11 @@ let bridge;
 let isQuitting = false;
 let requestId = 0;
 let buildReady = false;
-let autoCompareBusy = false;
-let clipboardTimer;
-let lastClipboardText = '';
+let comparisonBusy = false;
 const pending = new Map();
 const BRIDGE_TIMEOUT_MS = 30000;
-const CLIPBOARD_POLL_MS = 400;
 const TOGGLE_HOTKEY = 'CommandOrControl+Shift+Space';
+const COMPARE_HOTKEY = 'CommandOrControl+Shift+C';
 
 function createTrayIcon() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="7" fill="#17171d" stroke="#777"/><path d="M8 24 L13 8 H17 L22 24 H18.5 L17.3 20 H12.7 L11.5 24 Z M13.6 17 H16.4 L15 12.2 Z" fill="#eee"/></svg>`;
@@ -182,11 +180,6 @@ function withStats(response) {
 
 function markBuildLoaded() {
   buildReady = true;
-  lastClipboardText = clipboard.readText().trim();
-}
-
-function isLikelyPoEItem(text) {
-  return typeof text === 'string' && text.length > 20 && /Item Class:\s*/i.test(text) && /Rarity:\s*/i.test(text);
 }
 
 async function compareItemText(itemText) {
@@ -195,28 +188,24 @@ async function compareItemText(itemText) {
   return callBridge('compareItem', { itemText });
 }
 
-async function checkClipboard() {
-  if (!buildReady || autoCompareBusy) return;
-  const text = clipboard.readText().trim();
-  if (!text || text === lastClipboardText) return;
-  lastClipboardText = text;
-  if (!isLikelyPoEItem(text)) return;
-  autoCompareBusy = true;
-  try {
-    const response = await compareItemText(text);
-    if (response?.ok) mainWindow?.webContents.send('auto-comparison', response.result);
-    else mainWindow?.webContents.send('auto-comparison-error', { error: response?.error || 'Item comparison failed.' });
-  } catch (error) {
-    mainWindow?.webContents.send('auto-comparison-error', { error: error.message });
-  } finally {
-    autoCompareBusy = false;
+async function compareClipboardItem() {
+  if (!buildReady) {
+    return { ok: false, error: 'Load a PoB2 build before comparing an item.' };
   }
-}
-
-function startClipboardWatcher() {
-  clearInterval(clipboardTimer);
-  lastClipboardText = clipboard.readText().trim();
-  clipboardTimer = setInterval(checkClipboard, CLIPBOARD_POLL_MS);
+  if (comparisonBusy) {
+    return { ok: false, error: 'Item comparison is already running.' };
+  }
+  const itemText = clipboard.readText().trim();
+  if (!itemText) return { ok: false, error: 'Clipboard is empty. Copy an item from PoE first.' };
+  comparisonBusy = true;
+  try {
+    const response = await compareItemText(itemText);
+    if (response?.ok) mainWindow?.webContents.send('item-comparison', response.result);
+    else mainWindow?.webContents.send('item-comparison-error', { error: response?.error || 'Item comparison failed.' });
+    return response;
+  } finally {
+    comparisonBusy = false;
+  }
 }
 
 ipcMain.handle('bridge-status', async () => {
@@ -227,6 +216,7 @@ ipcMain.handle('bridge-status', async () => {
 
 ipcMain.handle('hide-overlay', () => { hideOverlay(); return { ok: true }; });
 ipcMain.handle('set-ignore-mouse-events', (_event, ignore) => { setWindowInteractive(!ignore); return { ok: true }; });
+ipcMain.handle('compare-clipboard-item', compareClipboardItem);
 
 ipcMain.handle('select-build', async () => {
   const result = await dialog.showOpenDialog(mainWindow, { title: 'Select a Path of Building XML build', properties: ['openFile'], filters: [{ name: 'Path of Building', extensions: ['xml'] }] });
@@ -249,24 +239,17 @@ ipcMain.handle('load-clipboard-build', async () => {
   return response;
 });
 
-ipcMain.handle('compare-clipboard-item', async () => {
-  const itemText = clipboard.readText().trim();
-  if (!itemText) return { ok: false, error: 'Clipboard is empty.' };
-  return compareItemText(itemText);
-});
-
 ipcMain.handle('calculate', async () => withStats(await callBridge('getStats')));
 
 app.whenReady().then(() => {
   createTray();
   createWindow();
-  startClipboardWatcher();
   if (!globalShortcut.register(TOGGLE_HOTKEY, toggleOverlay)) console.error(`Failed to register overlay hotkey: ${TOGGLE_HOTKEY}`);
+  if (!globalShortcut.register(COMPARE_HOTKEY, compareClipboardItem)) console.error(`Failed to register item compare hotkey: ${COMPARE_HOTKEY}`);
 });
 
 app.on('will-quit', () => {
   isQuitting = true;
-  clearInterval(clipboardTimer);
   globalShortcut.unregisterAll();
   tray?.destroy();
   bridge?.kill();
