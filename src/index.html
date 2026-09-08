@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>PoB2 Comparitator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="panel">
+    <div class="titlebar">
+      <strong>PoB2 Comparitator</strong>
+      <button id="close">×</button>
+    </div>
+    <div id="status" class="status">Connecting to PoB2…</div>
+    <button id="load">Load PoB2 Build</button>
+    <button id="calculate" disabled>Calculate Stats</button>
+    <div id="file" class="muted">No build loaded</div>
+    <pre id="output">Waiting for PoB2…</pre>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>
