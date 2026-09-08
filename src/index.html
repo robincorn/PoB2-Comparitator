@@ -9,15 +9,65 @@
 <body>
   <div class="panel">
     <div class="titlebar">
-      <strong>PoB2 Comparitator</strong>
-      <button id="close">×</button>
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div>
+          <strong>PoB2 Comparitator</strong>
+          <span>IN-GAME OVERLAY</span>
+        </div>
+      </div>
+      <div class="title-actions">
+        <span class="hotkey">Ctrl + Shift + Space</span>
+        <button id="close" title="Hide overlay">×</button>
+      </div>
     </div>
+
     <div id="status" class="status">Connecting to PoB2…</div>
-    <button id="paste">Load PoB2 Build from Clipboard</button>
-    <button id="load">Load PoB2 XML Build</button>
-    <button id="calculate" disabled>Calculate Stats</button>
-    <div id="file" class="muted">No build loaded</div>
-    <pre id="output">Waiting for PoB2…</pre>
+
+    <section class="build-header">
+      <div>
+        <span class="eyebrow">CURRENT BUILD</span>
+        <div id="file" class="build-name">No build loaded</div>
+      </div>
+      <button id="paste" class="primary small">Load Clipboard</button>
+    </section>
+
+    <section class="stats-card">
+      <div class="section-title">
+        <span>Character Stats</span>
+        <button id="calculate" disabled>Recalculate</button>
+      </div>
+      <div id="stats" class="stats-grid">
+        <div class="stat"><span>Life</span><strong data-stat="life">—</strong></div>
+        <div class="stat"><span>Mana</span><strong data-stat="mana">—</strong></div>
+        <div class="stat"><span>Energy Shield</span><strong data-stat="energyShield">—</strong></div>
+        <div class="stat"><span>Armour</span><strong data-stat="armour">—</strong></div>
+        <div class="stat"><span>Evasion</span><strong data-stat="evasion">—</strong></div>
+        <div class="stat highlight"><span>Total DPS</span><strong data-stat="totalDPS">—</strong></div>
+        <div class="stat highlight"><span>Average Damage</span><strong data-stat="averageDamage">—</strong></div>
+      </div>
+    </section>
+
+    <section class="compare-card">
+      <div class="section-title">
+        <span>Comparison</span>
+        <span class="coming">NEXT</span>
+      </div>
+      <div class="compare-placeholder">
+        <div class="compare-icon">+</div>
+        <div>
+          <strong>Compare an item or gem</strong>
+          <p>Paste an item later and we’ll calculate the exact change through PoB2.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer">
+      <button id="load">Load XML Build</button>
+      <span>PoB2 engine · local calculation</span>
+    </div>
+
+    <pre id="output" hidden>Waiting for PoB2…</pre>
   </div>
   <script src="renderer.js"></script>
 </body>
