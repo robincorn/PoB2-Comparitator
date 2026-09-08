@@ -3,7 +3,8 @@ const file = document.getElementById('file');
 const calculate = document.getElementById('calculate');
 const compare = document.getElementById('compare');
 
-const statLabels = { life:'Life', mana:'Mana', energyShield:'Energy Shield', armour:'Armour', evasion:'Evasion', totalDPS:'Total DPS', averageDamage:'Average Damage' };
+const summaryStats = ['effectiveHitPool', 'effectiveMaxHit'];
+const comparisonStats = ['effectiveHitPool', 'effectiveMaxHit', 'totalDPS', 'averageDamage'];
 
 function formatStat(value) {
   if (value === undefined || value === null) return '—';
@@ -20,10 +21,37 @@ function formatDelta(value) {
 
 function renderStats(stats) {
   if (!stats) return;
-  for (const key of Object.keys(statLabels)) {
+  for (const key of summaryStats) {
     const element = document.querySelector(`[data-stat="${key}"]`);
     if (element) element.textContent = formatStat(stats[key]);
   }
+}
+
+function renderSkills(skills) {
+  const container = document.getElementById('skills');
+  if (!skills?.length) {
+    container.innerHTML = '<div class="empty-state">No damaging skills were found in the PoB2 calculation.</div>';
+    return;
+  }
+
+  const sorted = [...skills].sort((a, b) => (b.combinedDPS || b.hitDPS || 0) - (a.combinedDPS || a.hitDPS || 0));
+  const visible = sorted.slice(0, 8);
+  container.innerHTML = visible.map((skill) => `
+    <div class="skill-row">
+      <div class="skill-name" title="${escapeHtml(skill.name)}">${escapeHtml(skill.name)}</div>
+      <div class="skill-value"><span>DPS</span><strong>${formatStat(skill.combinedDPS || skill.hitDPS)}</strong></div>
+      <div class="skill-value"><span>Avg Hit</span><strong>${formatStat(skill.averageDamage)}</strong></div>
+      <div class="skill-value compact"><span>Speed</span><strong>${formatStat(skill.speed)}</strong></div>
+    </div>
+  `).join('');
+
+  if (sorted.length > visible.length) {
+    container.insertAdjacentHTML('beforeend', `<div class="skill-more">+ ${sorted.length - visible.length} more calculated skills</div>`);
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
 }
 
 function showResult(result) {
@@ -34,7 +62,8 @@ function showResult(result) {
   }
   status.textContent = 'PoB2 connected';
   status.className = 'status ok';
-  if (result.stats) renderStats(result.stats);
+  renderStats(result.stats);
+  renderSkills(result.skills);
 }
 
 function buildLoaded(result, label) {
@@ -43,7 +72,6 @@ function buildLoaded(result, label) {
     file.textContent = label;
     calculate.disabled = false;
     compare.disabled = false;
-    if (result.stats) renderStats(result.stats);
   }
 }
 
@@ -52,7 +80,7 @@ function renderComparison(result) {
   document.getElementById('item-name').textContent = result.itemName || 'Clipboard Item';
   document.getElementById('item-slot').textContent = result.slot ? `Replaced: ${result.slot}` : '';
   section.hidden = false;
-  for (const key of Object.keys(statLabels)) {
+  for (const key of comparisonStats) {
     document.getElementById(`delta-${key}-base`).textContent = formatStat(result.base?.[key]);
     document.getElementById(`delta-${key}-changed`).textContent = formatStat(result.changed?.[key]);
     const deltaElement = document.getElementById(`delta-${key}`);
