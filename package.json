@@ -1,0 +1,13 @@
+{
+  "name": "pob2-comparitator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal PoB2 comparison overlay proof of concept",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^38.0.0"
+  }
+}
