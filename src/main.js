@@ -408,16 +408,23 @@ ipcMain.handle('set-ignore-mouse-events', (_e, ignore) => {
 ipcMain.handle('compare-clipboard-item', compareClipboardItem);
 
 ipcMain.handle('select-build', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
+  const wasOpen = overlayOpen;
+  ensureOverlayVisible();
+  const result = await dialog.showOpenDialog(null, {
     title: 'Select a Path of Building XML build',
     properties: ['openFile'],
     filters: [{ name: 'Path of Building', extensions: ['xml'] }]
   });
-  if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true };
+  if (result.canceled || !result.filePaths[0]) {
+    if (wasOpen) ensureOverlayVisible();
+    return { ok: false, canceled: true };
+  }
+
   const filePath = result.filePaths[0];
+  if (wasOpen) ensureOverlayVisible();
   const response = withStats(await loadXml(fs.readFileSync(filePath, 'utf8'), path.basename(filePath, '.xml')));
   if (response.ok) markBuildLoaded();
-  ensureOverlayVisible();
+  if (wasOpen) ensureOverlayVisible();
   return { ...response, file: filePath };
 });
 
