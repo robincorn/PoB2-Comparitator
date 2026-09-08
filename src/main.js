@@ -222,12 +222,24 @@ function persistAuth() {
   catch (error) { console.error('Could not persist PoE auth:', error); }
 }
 
-function sendPoeStatus(extra = {}) {
+async function getPoeStatus() {
   const character = persistence?.getCharacterState() || null;
-  mainWindow?.webContents.send('poe-status', {
+  let stats = null;
+  if (buildReady) stats = withStats(await callBridge('getStats'))?.stats || null;
+  return {
     connected: Boolean(poe?.isAuthenticated()),
     username: poe?.auth?.username || null,
     character,
+    stats,
+    buildReady,
+  };
+}
+
+function sendPoeStatus(extra = {}) {
+  mainWindow?.webContents.send('poe-status', {
+    connected: Boolean(poe?.isAuthenticated()),
+    username: poe?.auth?.username || null,
+    character: persistence?.getCharacterState() || null,
     ...extra,
   });
 }
@@ -266,6 +278,7 @@ async function syncSelectedCharacter() {
     const state = persistence.getCharacterState();
     mainWindow?.webContents.send('poe-character', { character: state });
     mainWindow?.webContents.send('poe-sync-status', { state: 'synced', character: state });
+    mainWindow?.webContents.send('poe-status', { connected: true, username: poe.auth?.username || null, character: state });
     return { ok: true, ...response, character: state };
   } catch (error) {
     const cached = persistence.loadSnapshot();
@@ -318,11 +331,7 @@ ipcMain.handle('load-clipboard-build', async () => {
 
 ipcMain.handle('calculate', async () => withStats(await callBridge('getStats')));
 
-ipcMain.handle('poe-status', () => ({
-  connected: Boolean(poe?.isAuthenticated()),
-  username: poe?.auth?.username || null,
-  character: persistence?.getCharacterState() || null,
-}));
+ipcMain.handle('poe-status', getPoeStatus);
 
 ipcMain.handle('poe-connect', async () => {
   try {
