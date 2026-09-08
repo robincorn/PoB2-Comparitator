@@ -1,66 +1,112 @@
+const overlay = document.getElementById('overlay');
 const status = document.getElementById('status');
 const file = document.getElementById('file');
 const calculate = document.getElementById('calculate');
-const compare = document.getElementById('compare');
-
-const summaryStats = ['effectiveHitPool', 'effectiveMaxHit'];
-const comparisonStats = ['effectiveHitPool', 'effectiveMaxHit', 'totalDPS', 'averageDamage'];
+const pinnedKey = 'pob2-comparitator:pinned-tiles';
+const pinned = new Set(JSON.parse(localStorage.getItem(pinnedKey) || '[]'));
+let comparisonTimer;
 
 function formatStat(value) {
-  if (value === undefined || value === null) return '—';
+  if (value === undefined || value === null || Number.isNaN(value)) return '—';
   if (typeof value !== 'number') return String(value);
   return Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function formatDelta(value) {
-  if (value === undefined || value === null) return '—';
+  if (value === undefined || value === null || Number.isNaN(value)) return '—';
   if (value === 0) return '±0';
   const text = formatStat(Math.abs(value));
   return value > 0 ? `+${text}` : `-${text}`;
 }
 
+function formatPercent(delta, base) {
+  if (!Number.isFinite(delta) || !Number.isFinite(base) || base === 0) return '';
+  const pct = (delta / Math.abs(base)) * 100;
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+}
+
 function renderStats(stats) {
   if (!stats) return;
-  for (const key of summaryStats) {
-    const element = document.querySelector(`[data-stat="${key}"]`);
-    if (element) element.textContent = formatStat(stats[key]);
-  }
+  document.getElementById('ehp').textContent = formatStat(stats.effectiveHitPool);
+  document.getElementById('maxhit').textContent = formatStat(stats.effectiveMaxHit);
 }
 
 function renderSkills(skills) {
   const container = document.getElementById('skills');
   if (!skills?.length) {
-    container.innerHTML = '<div class="empty-state">No damaging skills were found in the PoB2 calculation.</div>';
+    container.innerHTML = '<div class="empty-state">No damaging skills found.</div>';
     return;
   }
-
   const sorted = [...skills].sort((a, b) => (b.combinedDPS || b.hitDPS || 0) - (a.combinedDPS || a.hitDPS || 0));
-  const visible = sorted.slice(0, 8);
-  container.innerHTML = visible.map((skill) => `
+  container.innerHTML = sorted.slice(0, 6).map((skill) => `
     <div class="skill-row">
       <div class="skill-name" title="${escapeHtml(skill.name)}">${escapeHtml(skill.name)}</div>
-      <div class="skill-value"><span>DPS</span><strong>${formatStat(skill.combinedDPS || skill.hitDPS)}</strong></div>
-      <div class="skill-value"><span>Avg Hit</span><strong>${formatStat(skill.averageDamage)}</strong></div>
-      <div class="skill-value compact"><span>Speed</span><strong>${formatStat(skill.speed)}</strong></div>
+      <div><span>DPS</span><strong>${formatStat(skill.combinedDPS || skill.hitDPS)}</strong></div>
+      <div><span>AVG</span><strong>${formatStat(skill.averageDamage)}</strong></div>
+    </div>
+  `).join('');
+}
+
+function renderComparison(result) {
+  if (!result) return;
+  const section = document.getElementById('comparison');
+  section.hidden = false;
+  document.getElementById('item-name').textContent = result.itemName || 'Clipboard Item';
+  document.getElementById('item-slot').textContent = result.slot ? result.slot : '';
+
+  const base = result.base?.stats || {};
+  const changed = result.changed?.stats || {};
+  const rows = [
+    ['ehp', 'Effective Hit Pool', base.effectiveHitPool, changed.effectiveHitPool, result.delta?.effectiveHitPool],
+    ['maxhit', 'Effective Max Hit', base.effectiveMaxHit, changed.effectiveMaxHit, result.delta?.effectiveMaxHit],
+  ];
+  for (const [key, _label, oldValue, newValue, delta] of rows) {
+    document.getElementById(`${key}-base`).textContent = formatStat(oldValue);
+    document.getElementById(`${key}-changed`).textContent = formatStat(newValue);
+    const el = document.getElementById(`${key}-delta`);
+    el.textContent = `${formatDelta(delta)} ${formatPercent(delta, oldValue)}`.trim();
+    el.className = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
+  }
+
+  const skillContainer = document.getElementById('skill-comparisons');
+  const skillDeltas = [...(result.delta?.skills || [])]
+    .sort((a, b) => Math.abs(b.dpsDelta || 0) - Math.abs(a.dpsDelta || 0))
+    .slice(0, 4);
+  skillContainer.innerHTML = skillDeltas.map((skill) => `
+    <div class="skill-compare-row">
+      <div class="skill-compare-name" title="${escapeHtml(skill.name)}">${escapeHtml(skill.name)}</div>
+      <div><span>DPS</span><strong>${formatStat(skill.baseDPS)} → ${formatStat(skill.changedDPS)}</strong></div>
+      <em class="${skill.dpsDelta > 0 ? 'positive' : skill.dpsDelta < 0 ? 'negative' : 'neutral'}">${formatDelta(skill.dpsDelta)} ${formatPercent(skill.dpsDelta, skill.baseDPS)}</em>
     </div>
   `).join('');
 
-  if (sorted.length > visible.length) {
-    container.insertAdjacentHTML('beforeend', `<div class="skill-more">+ ${sorted.length - visible.length} more calculated skills</div>`);
+  const defense = [result.delta?.effectiveHitPool, result.delta?.effectiveMaxHit].filter(Number.isFinite);
+  const dps = skillDeltas.map((skill) => skill.dpsDelta).filter(Number.isFinite);
+  const hasDefenseLoss = defense.some((value) => value < 0);
+  const hasDefenseGain = defense.some((value) => value > 0);
+  const hasDpsLoss = dps.some((value) => value < 0);
+  const hasDpsGain = dps.some((value) => value > 0);
+  const verdict = document.getElementById('verdict');
+  let label = 'MIXED';
+  if ((hasDefenseGain || !defense.length) && (hasDpsGain || !dps.length) && !hasDefenseLoss && !hasDpsLoss) label = 'BETTER';
+  else if (hasDefenseLoss && hasDpsLoss && !hasDpsGain) label = 'WORSE';
+  verdict.textContent = label;
+  verdict.className = `verdict ${label.toLowerCase()}`;
+
+  clearTimeout(comparisonTimer);
+  if (!pinned.has('comparison')) {
+    comparisonTimer = setTimeout(() => { if (!pinned.has('comparison')) section.hidden = true; }, 9000);
   }
 }
 
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
+function showError(error) {
+  status.textContent = `Error: ${error || 'Unknown error'}`;
+  status.className = 'status error';
 }
 
 function showResult(result) {
-  if (!result?.ok) {
-    status.textContent = `Error: ${result?.error || 'Unknown error'}`;
-    status.className = 'status error';
-    return;
-  }
-  status.textContent = 'PoB2 connected';
+  if (!result?.ok) { showError(result?.error); return; }
+  status.textContent = 'PoB2 ready · clipboard watcher active';
   status.className = 'status ok';
   renderStats(result.stats);
   renderSkills(result.skills);
@@ -68,65 +114,58 @@ function showResult(result) {
 
 function buildLoaded(result, label) {
   showResult(result);
-  if (result.ok) {
-    file.textContent = label;
-    calculate.disabled = false;
-    compare.disabled = false;
-  }
+  if (result.ok) file.textContent = label;
 }
 
-function renderComparison(result) {
-  const section = document.getElementById('comparison-results');
-  document.getElementById('item-name').textContent = result.itemName || 'Clipboard Item';
-  document.getElementById('item-slot').textContent = result.slot ? `Replaced: ${result.slot}` : '';
-  section.hidden = false;
-  for (const key of comparisonStats) {
-    document.getElementById(`delta-${key}-base`).textContent = formatStat(result.base?.[key]);
-    document.getElementById(`delta-${key}-changed`).textContent = formatStat(result.changed?.[key]);
-    const deltaElement = document.getElementById(`delta-${key}`);
-    const value = result.delta?.[key] ?? 0;
-    deltaElement.textContent = formatDelta(value);
-    deltaElement.className = value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
-  }
+function setPinned(tileId, value) {
+  if (value) pinned.add(tileId); else pinned.delete(tileId);
+  localStorage.setItem(pinnedKey, JSON.stringify([...pinned]));
+  const tile = document.querySelector(`[data-tile="${tileId}"]`);
+  const button = tile?.querySelector('.pin');
+  if (tile) tile.classList.toggle('pinned', value);
+  if (button) { button.textContent = value ? '●' : '○'; button.title = value ? 'Unpin tile' : 'Pin tile'; }
 }
 
-document.getElementById('close').onclick = () => window.pob.hideOverlay();
+function applyPins() {
+  document.querySelectorAll('.pinnable').forEach((tile) => setPinned(tile.dataset.tile, pinned.has(tile.dataset.tile)));
+}
 
-document.getElementById('paste').onclick = async () => {
-  const result = await window.pob.loadClipboardBuild();
-  buildLoaded(result, 'Build loaded from clipboard');
-};
+function setOverlayOpen(open) {
+  document.body.classList.toggle('overlay-open', open);
+}
 
-document.getElementById('load').onclick = async () => {
+function setupInteraction() {
+  document.querySelectorAll('.ui-interactive').forEach((element) => {
+    element.addEventListener('mouseenter', () => window.pob.setIgnoreMouseEvents(false));
+    element.addEventListener('mouseleave', () => window.pob.setIgnoreMouseEvents(true));
+  });
+}
+
+for (const button of document.querySelectorAll('.pin')) {
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const id = button.dataset.pin;
+    setPinned(id, !pinned.has(id));
+  });
+}
+
+document.getElementById('close').addEventListener('click', () => window.pob.hideOverlay());
+document.getElementById('paste').addEventListener('click', async () => buildLoaded(await window.pob.loadClipboardBuild(), 'Clipboard build'));
+document.getElementById('load').addEventListener('click', async () => {
   const result = await window.pob.selectBuild();
-  if (result.canceled) return;
-  buildLoaded(result, result.file || 'Build loaded');
-};
-
-compare.onclick = async () => {
-  compare.disabled = true;
-  compare.textContent = 'Comparing…';
-  try {
-    const result = await window.pob.compareClipboardItem();
-    if (result?.ok) {
-      status.textContent = 'Comparison calculated by PoB2';
-      status.className = 'status ok';
-      renderComparison(result.result);
-    } else {
-      showResult(result);
-    }
-  } finally {
-    compare.disabled = false;
-    compare.textContent = 'Compare Clipboard';
-  }
-};
-
-calculate.onclick = async () => {
+  if (!result.canceled) buildLoaded(result, result.file || 'XML build');
+});
+calculate.addEventListener('click', async () => {
   calculate.disabled = true;
   calculate.textContent = 'Calculating…';
-  try { showResult(await window.pob.calculate()); }
-  finally { calculate.disabled = false; calculate.textContent = 'Recalculate'; }
-};
+  try { showResult(await window.pob.calculate()); } finally { calculate.disabled = false; calculate.textContent = 'Recalculate'; }
+});
 
+window.pob.onAutoComparison(renderComparison);
+window.pob.onAutoComparisonError((result) => showError(result?.error));
+window.pob.onOverlayOpened(() => setOverlayOpen(true));
+window.pob.onOverlayClosed(() => setOverlayOpen(false));
 window.pob.onBridgeStatus(showResult);
+applyPins();
+setupInteraction();
 window.pob.status().then(showResult);
