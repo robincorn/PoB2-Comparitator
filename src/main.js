@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, globalShortcut, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, globalShortcut, Tray, Menu, nativeImage, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -9,8 +9,13 @@ let tray;
 let bridge;
 let isQuitting = false;
 let requestId = 0;
+let buildReady = false;
+let autoCompareBusy = false;
+let clipboardTimer;
+let lastClipboardText = '';
 const pending = new Map();
 const BRIDGE_TIMEOUT_MS = 30000;
+const CLIPBOARD_POLL_MS = 400;
 const TOGGLE_HOTKEY = 'CommandOrControl+Shift+Space';
 
 function createTrayIcon() {
@@ -18,17 +23,29 @@ function createTrayIcon() {
   return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
 }
 
+function setWindowInteractive(interactive) {
+  if (!mainWindow) return;
+  mainWindow.setIgnoreMouseEvents(!interactive, { forward: true });
+}
+
 function toggleOverlay() {
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
-  if (mainWindow.isVisible()) mainWindow.hide();
-  else mainWindow.showInactive();
+  if (mainWindow.isVisible()) {
+    mainWindow.hide();
+  } else {
+    mainWindow.showInactive();
+    setWindowInteractive(false);
+    mainWindow.webContents.send('overlay-opened');
+  }
 }
 
 function showOverlay() {
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.showInactive();
+  setWindowInteractive(false);
+  mainWindow.webContents.send('overlay-opened');
 }
 
 function createTray() {
@@ -44,14 +61,16 @@ function createTray() {
 }
 
 function createWindow() {
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const { x, y, width, height } = display.bounds;
   mainWindow = new BrowserWindow({
-    width: 520,
-    height: 680,
-    minWidth: 460,
-    minHeight: 520,
+    x,
+    y,
+    width,
+    height,
     frame: false,
     transparent: true,
-    resizable: true,
+    resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     show: true,
@@ -70,6 +89,7 @@ function createWindow() {
     }
   });
   mainWindow.on('closed', () => { mainWindow = null; });
+  setWindowInteractive(false);
 }
 
 function findLuaJit(root) {
@@ -156,6 +176,51 @@ async function loadXml(xml, name) {
   return callBridge('loadBuild', { xml, name });
 }
 
+function withStats(response) {
+  if (!response?.ok) return response;
+  return { ...response, stats: response.result?.stats, skills: response.result?.skills || [] };
+}
+
+function markBuildLoaded() {
+  buildReady = true;
+  lastClipboardText = clipboard.readText().trim();
+}
+
+function isLikelyPoEItem(text) {
+  return typeof text === 'string' && text.length > 20 && /Item Class:\s*/i.test(text) && /Rarity:\s*/i.test(text);
+}
+
+async function compareItemText(itemText) {
+  const result = await ensureBridge();
+  if (!result.ok) return result;
+  return callBridge('compareItem', { itemText });
+}
+
+async function checkClipboard() {
+  if (!buildReady || autoCompareBusy) return;
+  const text = clipboard.readText().trim();
+  if (!text || text === lastClipboardText) return;
+  lastClipboardText = text;
+  if (!isLikelyPoEItem(text)) return;
+
+  autoCompareBusy = true;
+  try {
+    const response = await compareItemText(text);
+    if (response?.ok) mainWindow?.webContents.send('auto-comparison', response.result);
+    else mainWindow?.webContents.send('auto-comparison-error', { error: response?.error || 'Item comparison failed.' });
+  } catch (error) {
+    mainWindow?.webContents.send('auto-comparison-error', { error: error.message });
+  } finally {
+    autoCompareBusy = false;
+  }
+}
+
+function startClipboardWatcher() {
+  clearInterval(clipboardTimer);
+  lastClipboardText = clipboard.readText().trim();
+  clipboardTimer = setInterval(checkClipboard, CLIPBOARD_POLL_MS);
+}
+
 ipcMain.handle('bridge-status', async () => {
   const result = await ensureBridge();
   if (!result.ok) return result;
@@ -163,11 +228,7 @@ ipcMain.handle('bridge-status', async () => {
 });
 
 ipcMain.handle('hide-overlay', () => { mainWindow?.hide(); return { ok: true }; });
-
-function withStats(response) {
-  if (!response?.ok) return response;
-  return { ...response, stats: response.result?.stats, skills: response.result?.skills || [] };
-}
+ipcMain.handle('set-ignore-mouse-events', (_event, ignore) => { setWindowInteractive(!ignore); return { ok: true }; });
 
 ipcMain.handle('select-build', async () => {
   const result = await dialog.showOpenDialog(mainWindow, { title: 'Select a Path of Building XML build', properties: ['openFile'], filters: [{ name: 'Path of Building', extensions: ['xml'] }] });
@@ -175,6 +236,7 @@ ipcMain.handle('select-build', async () => {
   const buildPath = result.filePaths[0];
   const xml = fs.readFileSync(buildPath, 'utf8');
   const response = withStats(await loadXml(xml, path.basename(buildPath, '.xml')));
+  if (response.ok) markBuildLoaded();
   return { ...response, file: buildPath };
 });
 
@@ -185,30 +247,28 @@ ipcMain.handle('load-clipboard-build', async () => {
   try { xml = decodeShareCode(code); }
   catch (error) { return { ok: false, error: error.message }; }
   const response = withStats(await loadXml(xml, 'Clipboard Build'));
+  if (response.ok) markBuildLoaded();
   return response;
 });
 
 ipcMain.handle('compare-clipboard-item', async () => {
   const itemText = clipboard.readText().trim();
   if (!itemText) return { ok: false, error: 'Clipboard is empty.' };
-  const result = await ensureBridge();
-  if (!result.ok) return result;
-  return callBridge('compareItem', { itemText });
+  return compareItemText(itemText);
 });
 
-ipcMain.handle('calculate', async () => {
-  const response = withStats(await callBridge('getStats'));
-  return response;
-});
+ipcMain.handle('calculate', async () => withStats(await callBridge('getStats')));
 
 app.whenReady().then(() => {
   createTray();
   createWindow();
+  startClipboardWatcher();
   if (!globalShortcut.register(TOGGLE_HOTKEY, toggleOverlay)) console.error(`Failed to register overlay hotkey: ${TOGGLE_HOTKEY}`);
 });
 
 app.on('will-quit', () => {
   isQuitting = true;
+  clearInterval(clipboardTimer);
   globalShortcut.unregisterAll();
   tray?.destroy();
   bridge?.kill();
