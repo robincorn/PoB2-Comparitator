@@ -6,6 +6,7 @@
   "main": "src/main.js",
   "scripts": {
     "setup": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/setup-pob.ps1",
+    "smoke": "node scripts/smoke-test.js",
     "start": "electron ."
   },
   "devDependencies": {
