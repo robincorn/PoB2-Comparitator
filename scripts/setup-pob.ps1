@@ -6,24 +6,33 @@ $ToolsPath = Join-Path $Root '.tools'
 $LuaDir = Join-Path $ToolsPath 'luajit'
 $LuaExe = Join-Path $LuaDir 'luajit.exe'
 $VersionFile = Join-Path $ToolsPath 'pob2-commit.txt'
+$PinnedCommit = if ($env:POB2_COMMIT) { $env:POB2_COMMIT } else { 'fd4c1acb7f9f5ffd13372f5387ae16f8e6278c15' }
 
 Write-Host '== PoB2 Comparitator setup ==' -ForegroundColor Cyan
+Write-Host "Pinned PoB2 commit: $PinnedCommit"
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw 'Git is required. Install Git for Windows once, then run this script again.'
 }
 
 # --- PoB2 -------------------------------------------------------------------
+# Keep the calculation engine pinned. The overlay is tested against this
+# revision rather than silently changing calculator behavior on every startup.
 if (Test-Path (Join-Path $PobPath '.git')) {
     Write-Host 'Updating PoB2 checkout...' -ForegroundColor Yellow
     git -C $PobPath fetch --depth 1 origin dev
-    git -C $PobPath checkout -q dev
-    git -C $PobPath reset --hard -q origin/dev
+    git -C $PobPath cat-file -e "$PinnedCommit^{commit}" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        git -C $PobPath fetch --depth 1 origin $PinnedCommit
+    }
+    git -C $PobPath checkout -q --detach $PinnedCommit
 } elseif (Test-Path $PobPath) {
     throw "The path '$PobPath' exists but is not a Git checkout. Remove it and run setup again."
 } else {
     Write-Host 'Downloading PoB2...' -ForegroundColor Yellow
     git clone --branch dev --depth 1 https://github.com/PathOfBuildingCommunity/PathOfBuilding-PoE2.git $PobPath
+    git -C $PobPath fetch --depth 1 origin $PinnedCommit
+    git -C $PobPath checkout -q --detach $PinnedCommit
 }
 
 $Headless = Join-Path $PobPath 'src\HeadlessWrapper.lua'
@@ -32,6 +41,7 @@ if (-not (Test-Path $Headless)) { throw 'PoB2 checkout is incomplete: src\Headle
 if (-not (Test-Path $DkJson)) { throw 'PoB2 checkout is incomplete: runtime\lua\dkjson.lua is missing.' }
 
 $PobCommit = (git -C $PobPath rev-parse HEAD).Trim()
+if ($PobCommit -ne $PinnedCommit) { throw "PoB2 checkout is not at the requested commit. Expected $PinnedCommit, got $PobCommit." }
 New-Item -ItemType Directory -Force -Path $ToolsPath | Out-Null
 Set-Content -Path $VersionFile -Value $PobCommit -Encoding ascii
 
