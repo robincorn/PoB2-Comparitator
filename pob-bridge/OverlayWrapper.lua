@@ -1,11 +1,8 @@
 -- Thin JSONL RPC bridge around PoB2's existing HeadlessWrapper.
 -- This file intentionally contains no calculation logic of its own.
 
-local dkjson = require "dkjson"
-
 dofile("HeadlessWrapper.lua")
-
-dofile("_SimpleGraphic.def.lua")
+local dkjson = require "dkjson"
 
 local function response(id, ok, result, err)
   local out = { id = id, ok = ok }
