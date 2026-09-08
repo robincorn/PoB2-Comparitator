@@ -3,7 +3,7 @@
 
 -- PoB2's headless wrapper prints startup messages and expects to be able to
 -- print to stdout. We keep stdout exclusively for JSONL transport by routing
--- all ordinary print() output to stderr before loading PoB2.
+-- all ordinary print() output to stderr before loading PoB.
 local nativePrint = print
 local function log(...)
   local parts = {}
@@ -15,8 +15,12 @@ local function log(...)
 end
 print = log
 
--- PoB2's HeadlessWrapper owns the complete application initialization and
--- exposes `build` when that initialization returns.
+-- PoB2 uses two different module mechanisms. Its custom LoadModule() resolves
+-- paths relative to the src working directory, while Lua's require() uses
+-- package.path. Some PoB2 modules use require("Modules.*"), so explicitly add
+-- the src tree to package.path before HeadlessWrapper starts initialization.
+package.path = "./?.lua;./?/init.lua;" .. package.path
+
 dofile("HeadlessWrapper.lua")
 
 local dkjson = require "dkjson"
