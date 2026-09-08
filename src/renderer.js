@@ -3,8 +3,14 @@ const status = document.getElementById('status');
 const file = document.getElementById('file');
 const calculate = document.getElementById('calculate');
 const compare = document.getElementById('compare');
+const poeAccount = document.getElementById('poe-account');
+const poeConnect = document.getElementById('poe-connect');
+const poeCharacter = document.getElementById('poe-character');
+const poeSync = document.getElementById('poe-sync');
+const poeSyncStatus = document.getElementById('poe-sync-status');
 const pinnedKey = 'pob2-comparitator:pinned-tiles';
 const pinned = new Set(JSON.parse(localStorage.getItem(pinnedKey) || '[]'));
+const characterOptions = new Map();
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -145,6 +151,93 @@ function setupInteraction() {
   });
 }
 
+function setPoeSyncStatus(state, error) {
+  const labels = {
+    authorizing: 'Waiting for Path of Exile authorization…',
+    syncing: 'Syncing character…',
+    synced: 'Synced just now',
+    offline: 'Offline · using last successful sync',
+    empty: 'Use Character Sync to load your build automatically.',
+  };
+  poeSyncStatus.textContent = error ? `Sync failed · ${error}` : (labels[state] || state || labels.empty);
+  poeSyncStatus.className = `sync-status ${state || ''}`;
+}
+
+function renderCharacters(characters, selected) {
+  characterOptions.clear();
+  poeCharacter.innerHTML = '<option value="">Choose character…</option>';
+  for (const character of characters || []) {
+    if (!character?.name) continue;
+    characterOptions.set(character.name, character);
+    const option = document.createElement('option');
+    option.value = character.name;
+    option.textContent = `${character.name} · ${character.level || 0} · ${character.league || '?'}`;
+    poeCharacter.appendChild(option);
+  }
+  poeCharacter.disabled = !(characters?.length);
+  poeSync.disabled = !selected?.name;
+  if (selected?.name && characterOptions.has(selected.name)) poeCharacter.value = selected.name;
+}
+
+function renderPoeStatus(info) {
+  if (!info) return;
+  poeAccount.textContent = info.connected ? (info.username || 'Connected') : 'Not connected';
+  poeConnect.textContent = info.connected ? 'Disconnect Account' : 'Connect Account';
+  if (info.stats) {
+    renderStats(info.stats);
+    renderSkills(info.stats ? undefined : undefined);
+  }
+  if (info.character) {
+    file.textContent = `${info.character.name} · ${info.character.league || 'Unknown league'}`;
+  }
+  poeSync.disabled = !info.character?.name;
+}
+
+async function refreshPoeCharacters() {
+  const result = await window.pob.poeListCharacters();
+  if (result?.ok) renderCharacters(result.characters, result.selected);
+  else if (result?.error) setPoeSyncStatus('error', result.error);
+  return result;
+}
+
+async function handlePoeConnect() {
+  poeConnect.disabled = true;
+  poeConnect.textContent = 'Authorizing…';
+  try {
+    const connected = await window.pob.poeStatus();
+    if (connected?.connected) {
+      const result = await window.pob.poeDisconnect();
+      if (result?.ok) {
+        renderPoeStatus({ connected: false });
+        renderCharacters([], null);
+        setPoeSyncStatus('empty');
+      }
+      return;
+    }
+    const result = await window.pob.poeConnect();
+    if (!result?.ok) showError(result?.error);
+    else renderCharacters(result.characters, result.selected);
+  } finally {
+    poeConnect.disabled = false;
+    poeConnect.textContent = (await window.pob.poeStatus())?.connected ? 'Disconnect Account' : 'Connect Account';
+  }
+}
+
+async function syncSelectedCharacter() {
+  poeSync.disabled = true;
+  setPoeSyncStatus('syncing');
+  try {
+    const result = await window.pob.poeSync();
+    if (!result?.ok) showError(result?.error);
+    else {
+      buildLoaded(result, result.character ? `${result.character.name} · ${result.character.league || 'Unknown league'}` : 'PoE character');
+      setPoeSyncStatus(result.cached ? 'offline' : 'synced');
+    }
+  } finally {
+    poeSync.disabled = !poeCharacter.value;
+  }
+}
+
 async function compareClipboard() {
   compare.disabled = true;
   compare.textContent = 'Comparing…';
@@ -171,11 +264,28 @@ document.getElementById('load').addEventListener('click', async () => {
   const result = await window.pob.selectBuild();
   if (!result.canceled) buildLoaded(result, result.file || 'XML build');
 });
-compare.addEventListener('click', compareClipboard);
 calculate.addEventListener('click', async () => {
   calculate.disabled = true;
   calculate.textContent = 'Calculating…';
   try { showResult(await window.pob.calculate()); } finally { calculate.disabled = false; calculate.textContent = 'Recalculate'; }
+});
+compare.addEventListener('click', compareClipboard);
+poeConnect.addEventListener('click', handlePoeConnect);
+poeSync.addEventListener('click', syncSelectedCharacter);
+poeCharacter.addEventListener('change', async () => {
+  const character = characterOptions.get(poeCharacter.value);
+  if (!character) return;
+  poeSync.disabled = true;
+  setPoeSyncStatus('syncing');
+  const result = await window.pob.poeSelectCharacter(character);
+  if (result?.ok) {
+    buildLoaded(result, `${character.name} · ${character.league || 'Unknown league'}`);
+    setPoeSyncStatus('synced');
+  } else {
+    showError(result?.error);
+    setPoeSyncStatus('error', result?.error);
+  }
+  poeSync.disabled = false;
 });
 
 window.pob.onItemComparisonStart(() => {
@@ -189,6 +299,23 @@ window.pob.onItemComparisonError((result) => showError(result?.error));
 window.pob.onOverlayOpened(() => setOverlayOpen(true));
 window.pob.onOverlayClosed(() => setOverlayOpen(false));
 window.pob.onBridgeStatus(showResult);
+window.pob.onPoeStatus((info) => {
+  renderPoeStatus(info);
+  if (info.characters) renderCharacters(info.characters, info.character);
+});
+window.pob.onPoeSyncStatus((info) => setPoeSyncStatus(info.state, info.error));
+window.pob.onPoeCharacter((info) => {
+  if (info?.character) {
+    file.textContent = `${info.character.name} · ${info.character.league || 'Unknown league'}`;
+    poeSync.disabled = false;
+  }
+});
+
 applyPins();
 setupInteraction();
 window.pob.status().then(showResult);
+window.pob.poeStatus().then(async (info) => {
+  renderPoeStatus(info);
+  if (info?.connected) await refreshPoeCharacters();
+  if (info?.character) setPoeSyncStatus('synced');
+});
