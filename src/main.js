@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { decodeShareCode } = require('./pob-code');
 
 let mainWindow;
 let bridge;
@@ -125,6 +126,14 @@ function callBridge(method, params = {}) {
   });
 }
 
+async function loadXml(xml, name) {
+  if (!bridge) {
+    const result = startBridge();
+    if (!result.ok) return result;
+  }
+  return callBridge('loadBuild', { xml, name });
+}
+
 ipcMain.handle('bridge-status', async () => {
   if (!bridge) {
     const result = startBridge();
@@ -143,8 +152,23 @@ ipcMain.handle('select-build', async () => {
 
   const buildPath = result.filePaths[0];
   const xml = fs.readFileSync(buildPath, 'utf8');
-  const response = await callBridge('loadBuild', { xml, name: path.basename(buildPath, '.xml') });
-  return { ...response, file: buildPath };
+  const response = await loadXml(xml, path.basename(buildPath, '.xml'));
+  return { ...response, file: buildPath, stats: response.result };
+});
+
+ipcMain.handle('load-clipboard-build', async () => {
+  const code = clipboard.readText().trim();
+  if (!code) return { ok: false, error: 'Clipboard is empty.' };
+
+  let xml;
+  try {
+    xml = decodeShareCode(code);
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+
+  const response = await loadXml(xml, 'Clipboard Build');
+  return { ...response, stats: response.result };
 });
 
 ipcMain.handle('calculate', () => callBridge('getStats'));
