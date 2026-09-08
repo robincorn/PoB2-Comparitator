@@ -16,14 +16,11 @@
       </div>
 
       <section class="account-panel">
-        <div class="panel-label">PATH OF EXILE</div>
-        <div id="poe-account" class="account-name">Not connected</div>
-        <button id="poe-connect" class="primary compact">Connect Account</button>
-        <div class="character-row">
-          <select id="poe-character" disabled><option value="">Choose character…</option></select>
-          <button id="poe-sync" class="sync-button" disabled title="Sync selected character">↻</button>
-        </div>
-        <div id="poe-sync-status" class="sync-status">Use Character Sync to load your build automatically.</div>
+        <div class="panel-label">LOCAL PATH OF BUILDING</div>
+        <div id="local-pob-path" class="account-name">PoB2 not detected</div>
+        <button id="local-pob-sync" class="primary compact">Sync via PoB2</button>
+        <button id="local-pob-cancel" class="sync-button" hidden title="Cancel PoB2 sync">×</button>
+        <div id="local-pob-status" class="sync-status">Open PoB2, import your character there, then save the build.</div>
       </section>
 
       <button id="load" class="primary">Load XML Build</button>
@@ -55,7 +52,7 @@
       </section>
 
       <section class="tile skills-tile pinnable ui-interactive" data-tile="skills">
-        <div class="tile-head"><span>OFFENCE · SKILLS</span><button class="pin" data-pin="skills" title="Pin tile">○</button></div>
+        <div class="tile-head"><span>OFFENCE · SKILLS & GEMS</span><button class="pin" data-pin="skills" title="Pin tile">○</button></div>
         <div id="skills" class="skill-list"><div class="empty-state">Load a PoB2 build to see calculated skills.</div></div>
       </section>
 
