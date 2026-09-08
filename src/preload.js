@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('pob', {
   onAutoComparison: (callback) => ipcRenderer.on('auto-comparison', (_event, value) => callback(value)),
   onAutoComparisonError: (callback) => ipcRenderer.on('auto-comparison-error', (_event, value) => callback(value)),
   onOverlayOpened: (callback) => ipcRenderer.on('overlay-opened', () => callback()),
+  onOverlayClosed: (callback) => ipcRenderer.on('overlay-closed', () => callback()),
 });
