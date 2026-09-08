@@ -23,7 +23,6 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-
   mainWindow.setAlwaysOnTop(true, 'floating');
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 }
@@ -63,7 +62,6 @@ function startBridge() {
       }
     }
   });
-
   bridge.stderr.on('data', (chunk) => console.error('[PoB]', chunk.toString()));
   bridge.on('exit', (code) => {
     for (const resolve of pending.values()) resolve({ ok: false, error: `PoB bridge exited (${code})` });
@@ -71,7 +69,6 @@ function startBridge() {
     bridge = null;
     mainWindow?.webContents.send('bridge-status', { ok: false, error: `PoB bridge exited (${code})` });
   });
-
   return { ok: true };
 }
 
@@ -100,9 +97,10 @@ ipcMain.handle('select-build', async () => {
   });
   if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true };
 
-  const xml = fs.readFileSync(result.filePaths[0], 'utf8');
-  const response = await callBridge('loadBuild', { xml, name: path.basename(result.filePaths[0, '.xml']) });
-  return { ...response, file: result.filePaths[0] };
+  const buildPath = result.filePaths[0];
+  const xml = fs.readFileSync(buildPath, 'utf8');
+  const response = await callBridge('loadBuild', { xml, name: path.basename(buildPath, '.xml') });
+  return { ...response, file: buildPath };
 });
 
 ipcMain.handle('calculate', () => callBridge('getStats'));
