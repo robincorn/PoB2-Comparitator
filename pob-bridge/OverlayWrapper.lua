@@ -39,7 +39,12 @@ local function skillStats()
   local savedSkillNumber = calcsTab.input.skill_number
   local savedMainSocketGroup = build.mainSocketGroup
   local savedSelections = {}
-  for index, group in ipairs(build.skillsTab.socketGroupList or {}) do savedSelections[index] = group.mainActiveSkillCalcs end
+  local savedActiveSkills = {}
+  for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
+    savedSelections[index] = group.mainActiveSkillCalcs
+    savedActiveSkills[index] = group.mainActiveSkill
+  end
+
   rebuildOutput()
   local result = {}
   for groupIndex, group in ipairs(build.skillsTab.socketGroupList or {}) do
@@ -50,22 +55,49 @@ local function skillStats()
       for skillIndex, activeSkill in ipairs(skillList) do
         local grantedEffect = activeSkill.activeEffect and activeSkill.activeEffect.grantedEffect
         if grantedEffect then
+          -- PoB2 keeps both selections in sync. Setting only mainActiveSkillCalcs
+          -- can leave CalcSetup using a different active skill, producing 0 DPS.
+          group.mainActiveSkill = skillIndex
           group.mainActiveSkillCalcs = skillIndex
           rebuildOutput()
           local output = calcsTab.mainOutput or {}
-          table.insert(result, { name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill", group = groupIndex, skillIndex = skillIndex, support = false, fullDPS = output.FullDPS or output.CombinedDPS or output.TotalDPS or 0, combinedDPS = output.CombinedDPS or output.TotalDPS or 0, hitDPS = output.TotalDPS or 0, averageDamage = output.AverageDamage or 0, speed = output.Speed, dotDPS = output.TotalDot or 0 })
+          table.insert(result, {
+            name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill",
+            group = groupIndex,
+            skillIndex = skillIndex,
+            support = false,
+            fullDPS = output.FullDPS or output.CombinedDPS or output.TotalDPS or 0,
+            combinedDPS = output.CombinedDPS or output.TotalDPS or 0,
+            hitDPS = output.TotalDPS or 0,
+            averageDamage = output.AverageDamage or 0,
+            speed = output.Speed,
+            dotDPS = output.TotalDot or 0
+          })
         end
       end
     end
     for _, gem in ipairs(group.gemList or {}) do
       if gem.support then
-        table.insert(result, { name = gem.nameSpec or (gem.grantedEffect and gem.grantedEffect.name) or "Support Gem", group = groupIndex, support = true, fullDPS = 0, combinedDPS = 0, hitDPS = 0, averageDamage = 0, dotDPS = 0 })
+        table.insert(result, {
+          name = gem.nameSpec or (gem.grantedEffect and gem.grantedEffect.name) or "Support Gem",
+          group = groupIndex,
+          support = true,
+          fullDPS = 0,
+          combinedDPS = 0,
+          hitDPS = 0,
+          averageDamage = 0,
+          dotDPS = 0
+        })
       end
     end
   end
+
   build.mainSocketGroup = savedMainSocketGroup
   calcsTab.input.skill_number = savedSkillNumber
-  for index, group in ipairs(build.skillsTab.socketGroupList or {}) do group.mainActiveSkillCalcs = savedSelections[index] end
+  for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
+    group.mainActiveSkillCalcs = savedSelections[index]
+    group.mainActiveSkill = savedActiveSkills[index]
+  end
   rebuildOutput()
   return result
 end
