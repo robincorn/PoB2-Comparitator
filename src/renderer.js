@@ -4,7 +4,6 @@ const file = document.getElementById('file');
 const calculate = document.getElementById('calculate');
 const pinnedKey = 'pob2-comparitator:pinned-tiles';
 const pinned = new Set(JSON.parse(localStorage.getItem(pinnedKey) || '[]'));
-let comparisonTimer;
 
 function formatStat(value) {
   if (value === undefined || value === null || Number.isNaN(value)) return '—';
@@ -92,11 +91,6 @@ function renderComparison(result) {
   else if (hasDefenseLoss && hasDpsLoss && !hasDpsGain) label = 'WORSE';
   verdict.textContent = label;
   verdict.className = `verdict ${label.toLowerCase()}`;
-
-  clearTimeout(comparisonTimer);
-  if (!pinned.has('comparison')) {
-    comparisonTimer = setTimeout(() => { if (!pinned.has('comparison')) section.hidden = true; }, 9000);
-  }
 }
 
 function showError(error) {
@@ -106,7 +100,7 @@ function showError(error) {
 
 function showResult(result) {
   if (!result?.ok) { showError(result?.error); return; }
-  status.textContent = 'PoB2 ready · clipboard watcher active';
+  status.textContent = 'PoB2 ready · item compare: Ctrl + Shift + C';
   status.className = 'status ok';
   renderStats(result.stats);
   renderSkills(result.skills);
@@ -161,8 +155,8 @@ calculate.addEventListener('click', async () => {
   try { showResult(await window.pob.calculate()); } finally { calculate.disabled = false; calculate.textContent = 'Recalculate'; }
 });
 
-window.pob.onAutoComparison(renderComparison);
-window.pob.onAutoComparisonError((result) => showError(result?.error));
+window.pob.onItemComparison(renderComparison);
+window.pob.onItemComparisonError((result) => showError(result?.error));
 window.pob.onOverlayOpened(() => setOverlayOpen(true));
 window.pob.onOverlayClosed(() => setOverlayOpen(false));
 window.pob.onBridgeStatus(showResult);
