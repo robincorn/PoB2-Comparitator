@@ -224,13 +224,14 @@ function persistAuth() {
 
 async function getPoeStatus() {
   const character = persistence?.getCharacterState() || null;
-  let stats = null;
-  if (buildReady) stats = withStats(await callBridge('getStats'))?.stats || null;
+  let summary = null;
+  if (buildReady) summary = withStats(await callBridge('getStats'));
   return {
     connected: Boolean(poe?.isAuthenticated()),
     username: poe?.auth?.username || null,
     character,
-    stats,
+    stats: summary?.stats || null,
+    skills: summary?.skills || [],
     buildReady,
   };
 }
