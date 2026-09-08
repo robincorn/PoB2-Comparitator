@@ -4,17 +4,28 @@
 -- Keep diagnostic output away from stdout: stdout is our JSONL transport.
 local nativePrint = print
 local function log(...)
-  io.stderr:write(table.concat({ ... }, "\t") .. "\n")
+  local parts = {}
+  for i = 1, select("#", ...) do
+    parts[i] = tostring(select(i, ...))
+  end
+  io.stderr:write(table.concat(parts, "\t") .. "\n")
   io.stderr:flush()
 end
 print = log
 
+-- PoB2's headless wrapper expects to be launched from pob/src and performs its
+-- full startup before exposing `build` and returning control to this bridge.
 dofile("HeadlessWrapper.lua")
+
 local dkjson = require "dkjson"
 
 local function response(id, ok, result, err)
   local out = { id = id, ok = ok }
-  if ok then out.result = result else out.error = err end
+  if ok then
+    out.result = result
+  else
+    out.error = err
+  end
   nativePrint(dkjson.encode(out))
   io.stdout:flush()
 end
@@ -34,8 +45,13 @@ end
 
 local function dispatch(request)
   if request.method == "getStatus" then
-    return { status = "ready", pobVersion = launch.versionNumber, branch = launch.versionBranch }
+    return {
+      status = "ready",
+      pobVersion = launch.versionNumber,
+      branch = launch.versionBranch,
+    }
   elseif request.method == "loadBuild" then
+    assert(type(request.params) == "table", "params is required")
     assert(type(request.params.xml) == "string", "params.xml is required")
     loadBuildFromXML(request.params.xml, request.params.name or "Overlay Build")
     return stats()
@@ -55,7 +71,8 @@ while true do
   if line ~= "" then
     local id = nil
     local ok, result = pcall(function()
-      local request = dkjson.decode(line)
+      local request, decodeErr = dkjson.decode(line)
+      assert(request, decodeErr or "Invalid JSON request")
       id = request.id
       return dispatch(request)
     end)
