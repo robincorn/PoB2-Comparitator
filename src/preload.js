@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('pob', {
   hideOverlay: () => ipcRenderer.invoke('hide-overlay'),
   setIgnoreMouseEvents: (ignore) => ipcRenderer.invoke('set-ignore-mouse-events', ignore),
   onBridgeStatus: (callback) => ipcRenderer.on('bridge-status', (_event, value) => callback(value)),
+  onItemComparisonStart: (callback) => ipcRenderer.on('item-comparison-start', () => callback()),
   onItemComparison: (callback) => ipcRenderer.on('item-comparison', (_event, value) => callback(value)),
   onItemComparisonError: (callback) => ipcRenderer.on('item-comparison-error', (_event, value) => callback(value)),
   onOverlayOpened: (callback) => ipcRenderer.on('overlay-opened', () => callback()),
