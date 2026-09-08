@@ -7,64 +7,52 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="panel">
-    <div class="titlebar">
-      <div class="brand">
-        <div class="brand-mark">P</div>
-        <div><strong>PoB2 Comparitator</strong><span>IN-GAME OVERLAY</span></div>
-      </div>
-      <div class="title-actions">
-        <span class="hotkey">Ctrl + Shift + Space</span>
-        <button id="close" title="Hide overlay">×</button>
-      </div>
-    </div>
+  <div id="overlay" class="overlay">
+    <aside class="control-dock ui-interactive">
+      <div class="dock-brand"><span class="brand-mark">P</span><div><strong>PoB2</strong><span>COMPARITATOR</span></div></div>
+      <button id="load" class="primary">Load XML Build</button>
+      <button id="paste" class="primary">Load PoB2 Clipboard</button>
+      <button id="calculate">Recalculate</button>
+      <div class="dock-divider"></div>
+      <div class="build-mini"><span>BUILD</span><strong id="file">No build loaded</strong></div>
+      <div id="status" class="status">Connecting to PoB2…</div>
+      <div class="dock-help"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd><span>toggle overlay</span></div>
+    </aside>
 
-    <div id="status" class="status">Connecting to PoB2…</div>
+    <main class="dashboard">
+      <section class="tile stat-tile pinnable ui-interactive" data-tile="ehp">
+        <div class="tile-head"><span>DEFENCE</span><button class="pin" data-pin="ehp" title="Pin tile">○</button></div>
+        <div class="metric-label">Effective Hit Pool</div>
+        <strong id="ehp" class="metric-value">—</strong>
+        <div class="tile-foot">PoB2 calculated</div>
+      </section>
 
-    <section class="build-header">
-      <div><span class="eyebrow">CURRENT BUILD</span><div id="file" class="build-name">No build loaded</div></div>
-      <div class="build-actions">
-        <button id="paste" class="primary small">Load Clipboard</button>
-        <button id="calculate" class="small" disabled>Recalculate</button>
-      </div>
-    </section>
+      <section class="tile stat-tile pinnable ui-interactive" data-tile="maxhit">
+        <div class="tile-head"><span>DEFENCE</span><button class="pin" data-pin="maxhit" title="Pin tile">○</button></div>
+        <div class="metric-label">Effective Max Hit</div>
+        <strong id="maxhit" class="metric-value">—</strong>
+        <div class="tile-foot">PoB2 calculated</div>
+      </section>
 
-    <section class="stats-card">
-      <div class="section-title"><span>PoB Summary</span><span class="coming">CALCULATED</span></div>
-      <div class="summary-grid">
-        <div class="summary-stat primary-stat"><span>Effective Hit Pool</span><strong data-stat="effectiveHitPool">—</strong></div>
-        <div class="summary-stat"><span>Effective Max Hit</span><strong data-stat="effectiveMaxHit">—</strong></div>
-      </div>
-    </section>
+      <section class="tile skills-tile pinnable ui-interactive" data-tile="skills">
+        <div class="tile-head"><span>OFFENCE · SKILLS</span><button class="pin" data-pin="skills" title="Pin tile">○</button></div>
+        <div id="skills" class="skill-list"><div class="empty-state">Load a PoB2 build to see calculated skills.</div></div>
+      </section>
 
-    <section class="skills-card">
-      <div class="section-title"><span>Skills</span><span class="coming">PoB DPS</span></div>
-      <div id="skills" class="skill-list">
-        <div class="empty-state">Load a PoB2 build to see calculated skill damage.</div>
-      </div>
-    </section>
-
-    <section class="compare-card">
-      <div class="section-title"><span>Item Comparison</span><span class="coming">PoB2</span></div>
-      <div class="compare-action">
-        <div class="compare-icon">+</div>
-        <div class="compare-copy"><strong>Copy an item from Path of Exile</strong><p>PoB2 will equip it temporarily and calculate the real change to your build.</p></div>
-        <button id="compare" class="primary compare-button" disabled>Compare Clipboard</button>
-      </div>
-      <div id="item-name" class="item-name">No item compared</div>
-      <div id="item-slot" class="item-slot"></div>
-      <div id="comparison-results" class="comparison-results" hidden>
-        <div class="compare-head"><span></span><span>BASE</span><span>ITEM</span><span>CHANGE</span></div>
-        <div class="delta-grid">
-          <div class="delta-row"><span>Effective Hit Pool</span><strong id="delta-effectiveHitPool-base">—</strong><strong id="delta-effectiveHitPool-changed">—</strong><em id="delta-effectiveHitPool">—</em></div>
-          <div class="delta-row"><span>Effective Max Hit</span><strong id="delta-effectiveMaxHit-base">—</strong><strong id="delta-effectiveMaxHit-changed">—</strong><em id="delta-effectiveMaxHit">—</em></div>
-          <div class="delta-row"><span>DPS</span><strong id="delta-totalDPS-base">—</strong><strong id="delta-totalDPS-changed">—</strong><em id="delta-totalDPS">—</em></div>
-          <div class="delta-row"><span>Average Hit</span><strong id="delta-averageDamage-base">—</strong><strong id="delta-averageDamage-changed">—</strong><em id="delta-averageDamage">—</em></div>
+      <section id="comparison" class="tile comparison-tile pinnable ui-interactive" data-tile="comparison" hidden>
+        <div class="tile-head"><span>ITEM COMPARISON · PoB2</span><button class="pin" data-pin="comparison" title="Pin tile">○</button></div>
+        <div class="item-title"><strong id="item-name">Clipboard Item</strong><span id="item-slot"></span></div>
+        <div id="verdict" class="verdict neutral">WAITING</div>
+        <div class="compare-grid">
+          <div class="compare-row"><span>Effective Hit Pool</span><strong id="ehp-base">—</strong><strong id="ehp-changed">—</strong><em id="ehp-delta">—</em></div>
+          <div class="compare-row"><span>Effective Max Hit</span><strong id="maxhit-base">—</strong><strong id="maxhit-changed">—</strong><em id="maxhit-delta">—</em></div>
         </div>
-      </div>
-    </section>
+        <div id="skill-comparisons" class="skill-comparisons"></div>
+        <div class="comparison-hint">Copy another item from PoE to compare automatically.</div>
+      </section>
+    </main>
 
-    <div class="footer"><button id="load">Load XML Build</button><span>PoB2 engine · local calculation</span></div>
+    <div class="overlay-hint">OPEN OVERLAY · ALL TILES · click ○ to pin</div>
   </div>
   <script src="renderer.js"></script>
 </body>
