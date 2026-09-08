@@ -14,16 +14,25 @@ function showResult(result) {
   if (result.stats) output.textContent = JSON.stringify(result.stats, null, 2);
 }
 
-document.getElementById('close').onclick = () => window.close();
-document.getElementById('load').onclick = async () => {
-  const result = await window.pob.selectBuild();
-  if (result.canceled) return;
+function buildLoaded(result, label) {
   showResult(result);
   if (result.ok) {
-    file.textContent = result.file || 'Build loaded';
+    file.textContent = label;
     calculate.disabled = false;
     output.textContent = 'Build loaded. Press Calculate Stats.';
   }
+}
+
+document.getElementById('close').onclick = () => window.close();
+document.getElementById('paste').onclick = async () => {
+  const result = await window.pob.loadClipboardBuild();
+  buildLoaded(result, 'Build loaded from clipboard');
+};
+
+document.getElementById('load').onclick = async () => {
+  const result = await window.pob.selectBuild();
+  if (result.canceled) return;
+  buildLoaded(result, result.file || 'Build loaded');
 };
 
 calculate.onclick = async () => showResult(await window.pob.calculate());
