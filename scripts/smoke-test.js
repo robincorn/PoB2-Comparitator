@@ -38,10 +38,18 @@ const pending = new Map();
 const timeout = setTimeout(() => { if (!responseReceived) { child.kill(); fail(`Bridge did not answer within 30 seconds during ${phase}. Check [PoB stderr] above for the last startup message.`); } }, 30000);
 
 function send(method, params = {}) { const id = nextId++; pending.set(id, method); child.stdin.write(JSON.stringify({ id, method, params }) + '\n'); return id; }
+
 function validateStats(stats, label) {
-  const requiredStats = ['life','mana','energyShield','armour','evasion','totalDPS','averageDamage'];
+  const requiredStats = ['effectiveHitPool', 'effectiveMaxHit'];
   const missing = requiredStats.filter((key) => typeof stats?.[key] !== 'number');
   if (missing.length) { fail(`${label} returned missing/non-numeric stats: ${missing.join(', ')}. Result: ${JSON.stringify(stats)}`); return false; }
+  return true;
+}
+
+function validateSkills(skills, label) {
+  if (!Array.isArray(skills)) { fail(`${label} returned no skill list: ${JSON.stringify(skills)}`); return false; }
+  const damaging = skills.filter((skill) => typeof skill?.combinedDPS === 'number' || typeof skill?.hitDPS === 'number');
+  if (!damaging.length) { fail(`${label} returned no calculated damaging skills: ${JSON.stringify(skills)}`); return false; }
   return true;
 }
 
@@ -66,12 +74,12 @@ child.stdout.on('data', (chunk) => {
       console.log(`PoB2 READY: ${response.result.pobVersion}`); phase = 'build import'; send('loadBuild', { xml, name: 'Smoke Test Build' }); return;
     }
     if (method === 'loadBuild') {
-      if (!validateStats(response.result, 'Build import')) { clearTimeout(timeout); child.kill(); return; }
-      console.log(`BUILD IMPORT PASSED: ${JSON.stringify(response.result)}`); phase = 'post-import calculation'; send('getStats'); return;
+      if (!validateStats(response.result?.stats, 'Build import') || !validateSkills(response.result?.skills, 'Build import')) { clearTimeout(timeout); child.kill(); return; }
+      console.log(`BUILD IMPORT PASSED: ${JSON.stringify({ stats: response.result.stats, skills: response.result.skills.length })}`); phase = 'post-import calculation'; send('getStats'); return;
     }
     if (method === 'getStats') {
-      if (!validateStats(response.result, 'Post-import calculation')) { clearTimeout(timeout); child.kill(); return; }
-      console.log(`POST-IMPORT CALCULATION PASSED: ${JSON.stringify(response.result)}`);
+      if (!validateStats(response.result?.stats, 'Post-import calculation') || !validateSkills(response.result?.skills, 'Post-import calculation')) { clearTimeout(timeout); child.kill(); return; }
+      console.log(`POST-IMPORT CALCULATION PASSED: ${JSON.stringify({ stats: response.result.stats, skills: response.result.skills.length })}`);
       phase = 'item comparison';
       send('compareItem', { itemText: 'New Item\nGold Ring\n+10 to maximum Life' });
       return;
@@ -79,11 +87,11 @@ child.stdout.on('data', (chunk) => {
     if (method === 'compareItem') {
       const result = response.result;
       if (!result?.itemName || !result?.slot || !validateStats(result.base, 'Item comparison base') || !validateStats(result.changed, 'Item comparison changed')) { clearTimeout(timeout); child.kill(); return; }
-      if (typeof result.delta?.life !== 'number') { clearTimeout(timeout); child.kill(); fail(`Item comparison returned invalid life delta: ${JSON.stringify(result)}`); return; }
+      if (typeof result.delta?.effectiveHitPool !== 'number' || typeof result.delta?.effectiveMaxHit !== 'number') { clearTimeout(timeout); child.kill(); fail(`Item comparison returned invalid defense deltas: ${JSON.stringify(result)}`); return; }
       console.log(`ITEM COMPARISON PASSED: ${result.itemName} in ${result.slot}; delta=${JSON.stringify(result.delta)}`);
       responseReceived = true;
       clearTimeout(timeout);
-      console.log('SMOKE TEST PASSED: PoB2 startup + share-code decode + build import + calculation + item comparison are working.');
+      console.log('SMOKE TEST PASSED: PoB2 startup + share-code decode + build import + skill DPS + effective defenses + item comparison are working.');
       child.kill();
     }
   }
