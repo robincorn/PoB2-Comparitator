@@ -30,14 +30,14 @@ function setWindowInteractive(interactive) {
 
 function hideOverlay() {
   if (!mainWindow) return;
-  mainWindow.hide();
   mainWindow.webContents.send('overlay-closed');
   setWindowInteractive(false);
 }
 
 function showOverlay() {
   if (!mainWindow) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  mainWindow.setBounds(display.bounds, false);
   mainWindow.showInactive();
   setWindowInteractive(false);
   mainWindow.webContents.send('overlay-opened');
@@ -45,8 +45,8 @@ function showOverlay() {
 
 function toggleOverlay() {
   if (!mainWindow) return;
-  if (mainWindow.isVisible()) hideOverlay();
-  else showOverlay();
+  const currentlyOpen = mainWindow.webContents.executeJavaScript('document.body.classList.contains("overlay-open")', true).catch(() => false);
+  currentlyOpen.then((open) => open ? hideOverlay() : showOverlay());
 }
 
 function createTray() {
@@ -71,7 +71,7 @@ function createWindow() {
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
-    show: false,
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -80,6 +80,7 @@ function createWindow() {
   });
   mainWindow.setAlwaysOnTop(true, 'floating');
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.webContents.once('did-finish-load', () => hideOverlay());
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
@@ -200,7 +201,6 @@ async function checkClipboard() {
   if (!text || text === lastClipboardText) return;
   lastClipboardText = text;
   if (!isLikelyPoEItem(text)) return;
-
   autoCompareBusy = true;
   try {
     const response = await compareItemText(text);
