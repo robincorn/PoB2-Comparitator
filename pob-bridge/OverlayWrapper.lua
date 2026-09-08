@@ -39,43 +39,57 @@ local function skillStats()
   local savedSkillNumber = calcsTab.input.skill_number
   local savedMainSocketGroup = build.mainSocketGroup
   local savedSelections = {}
-  local savedActiveSkills = {}
+  local result = {}
+
   for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
-    savedSelections[index] = group.mainActiveSkillCalcs
-    savedActiveSkills[index] = group.mainActiveSkill
+    savedSelections[index] = {
+      mainActiveSkill = group.mainActiveSkill,
+      mainActiveSkillCalcs = group.mainActiveSkillCalcs,
+    }
   end
 
-  rebuildOutput()
-  local result = {}
+  -- PoB2 itself uses displaySkillList (not displaySkillListCalcs) when selecting
+  -- a skill. The latter is a calculation-side representation and its indices
+  -- are not the UI selection indices we need to write back to the socket group.
   for groupIndex, group in ipairs(build.skillsTab.socketGroupList or {}) do
-    local skillList = group.displaySkillListCalcs or {}
-    if #skillList > 0 then
-      build.mainSocketGroup = groupIndex
-      calcsTab.input.skill_number = groupIndex
-      for skillIndex, activeSkill in ipairs(skillList) do
-        local grantedEffect = activeSkill.activeEffect and activeSkill.activeEffect.grantedEffect
-        if grantedEffect then
-          -- PoB2 keeps both selections in sync. Setting only mainActiveSkillCalcs
-          -- can leave CalcSetup using a different active skill, producing 0 DPS.
-          group.mainActiveSkill = skillIndex
-          group.mainActiveSkillCalcs = skillIndex
-          rebuildOutput()
-          local output = calcsTab.mainOutput or {}
-          table.insert(result, {
-            name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill",
-            group = groupIndex,
-            skillIndex = skillIndex,
-            support = false,
-            fullDPS = output.FullDPS or output.CombinedDPS or output.TotalDPS or 0,
-            combinedDPS = output.CombinedDPS or output.TotalDPS or 0,
-            hitDPS = output.TotalDPS or 0,
-            averageDamage = output.AverageDamage or 0,
-            speed = output.Speed,
-            dotDPS = output.TotalDot or 0
-          })
-        end
+    local skillList = group.displaySkillList or {}
+    for skillIndex, activeSkill in ipairs(skillList) do
+      local grantedEffect = activeSkill.activeEffect and activeSkill.activeEffect.grantedEffect
+      if grantedEffect then
+        build.mainSocketGroup = groupIndex
+        calcsTab.input.skill_number = groupIndex
+        group.mainActiveSkill = skillIndex
+        group.mainActiveSkillCalcs = skillIndex
+        build.buildFlag = true
+        build.modFlag = true
+
+        -- This is the same selection/update sequence used by PoB2's own tests
+        -- for per-skill calculations.
+        runCallback("OnFrame")
+        calcsTab:BuildOutput()
+        runCallback("OnFrame")
+
+        local output = calcsTab.mainOutput or {}
+        local fullDPS = output.FullDPS
+        local combinedDPS = output.CombinedDPS
+        local hitDPS = output.TotalDPS
+        local dotDPS = output.TotalDotDPS or output.TotalDot or 0
+
+        table.insert(result, {
+          name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill",
+          group = groupIndex,
+          skillIndex = skillIndex,
+          support = false,
+          fullDPS = fullDPS or 0,
+          combinedDPS = combinedDPS or 0,
+          hitDPS = hitDPS or 0,
+          averageDamage = output.AverageDamage or 0,
+          speed = output.Speed,
+          dotDPS = dotDPS
+        })
       end
     end
+
     for _, gem in ipairs(group.gemList or {}) do
       if gem.support then
         table.insert(result, {
@@ -95,8 +109,11 @@ local function skillStats()
   build.mainSocketGroup = savedMainSocketGroup
   calcsTab.input.skill_number = savedSkillNumber
   for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
-    group.mainActiveSkillCalcs = savedSelections[index]
-    group.mainActiveSkill = savedActiveSkills[index]
+    local saved = savedSelections[index]
+    if saved then
+      group.mainActiveSkill = saved.mainActiveSkill
+      group.mainActiveSkillCalcs = saved.mainActiveSkillCalcs
+    end
   end
   rebuildOutput()
   return result
