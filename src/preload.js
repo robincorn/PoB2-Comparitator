@@ -7,5 +7,9 @@ contextBridge.exposeInMainWorld('pob', {
   compareClipboardItem: () => ipcRenderer.invoke('compare-clipboard-item'),
   calculate: () => ipcRenderer.invoke('calculate'),
   hideOverlay: () => ipcRenderer.invoke('hide-overlay'),
+  setIgnoreMouseEvents: (ignore) => ipcRenderer.invoke('set-ignore-mouse-events', ignore),
   onBridgeStatus: (callback) => ipcRenderer.on('bridge-status', (_event, value) => callback(value)),
+  onAutoComparison: (callback) => ipcRenderer.on('auto-comparison', (_event, value) => callback(value)),
+  onAutoComparisonError: (callback) => ipcRenderer.on('auto-comparison-error', (_event, value) => callback(value)),
+  onOverlayOpened: (callback) => ipcRenderer.on('overlay-opened', () => callback()),
 });
