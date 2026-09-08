@@ -27,18 +27,33 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 }
 
+function findLuaJit(root) {
+  if (process.env.LUAJIT) return process.env.LUAJIT;
+  const local = path.join(root, '.tools', 'luajit', 'luajit.exe');
+  if (fs.existsSync(local)) return local;
+  return process.platform === 'win32' ? 'luajit.exe' : 'luajit';
+}
+
 function startBridge() {
-  const pobRoot = process.env.POB2_PATH || path.join(__dirname, '..', 'pob');
+  const projectRoot = path.join(__dirname, '..');
+  const pobRoot = process.env.POB2_PATH || path.join(projectRoot, 'pob');
   const pobSrc = path.join(pobRoot, 'src');
-  const bridgeScript = path.join(__dirname, '..', 'pob-bridge', 'OverlayWrapper.lua');
-  const luajit = process.env.LUAJIT || 'luajit';
+  const bridgeScript = path.join(projectRoot, 'pob-bridge', 'OverlayWrapper.lua');
+  const luajit = findLuaJit(projectRoot);
 
   if (!fs.existsSync(path.join(pobSrc, 'HeadlessWrapper.lua'))) {
-    return { ok: false, error: `PoB2 not found at ${pobRoot}. Run the setup instructions first.` };
+    return { ok: false, error: `PoB2 not found at ${pobRoot}. Run setup-pob.cmd first.` };
   }
+
+  const env = {
+    ...process.env,
+    LUA_PATH: `../runtime/lua/?.lua;../runtime/lua/?/init.lua;;${process.env.LUA_PATH || ''}`,
+    LUA_CPATH: `../runtime/?.dll;;${process.env.LUA_CPATH || ''}`,
+  };
 
   bridge = spawn(luajit, [bridgeScript], {
     cwd: pobSrc,
+    env,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -63,6 +78,12 @@ function startBridge() {
     }
   });
   bridge.stderr.on('data', (chunk) => console.error('[PoB]', chunk.toString()));
+  bridge.on('error', (err) => {
+    for (const resolve of pending.values()) resolve({ ok: false, error: `Could not start LuaJIT: ${err.message}` });
+    pending.clear();
+    bridge = null;
+    mainWindow?.webContents.send('bridge-status', { ok: false, error: `Could not start LuaJIT: ${err.message}` });
+  });
   bridge.on('exit', (code) => {
     for (const resolve of pending.values()) resolve({ ok: false, error: `PoB bridge exited (${code})` });
     pending.clear();
