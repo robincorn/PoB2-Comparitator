@@ -23,7 +23,71 @@ end
 
 local function stats()
   local output = build.calcsTab.mainOutput or {}
-  return { life=output.Life, mana=output.Mana, energyShield=output.EnergyShield, armour=output.Armour, evasion=output.Evasion, totalDPS=output.TotalDPS, averageDamage=output.AverageDamage }
+  return {
+    effectiveHitPool = output.TotalEHP,
+    effectiveMaxHit = output.SecondMinimalMaximumHitTaken,
+    totalDPS = output.TotalDPS,
+    averageDamage = output.AverageDamage,
+    speed = output.Speed,
+  }
+end
+
+local function skillStats()
+  local calcsTab = build.calcsTab
+  local savedSkillNumber = calcsTab.input.skill_number
+  local savedMainSocketGroup = build.mainSocketGroup
+  local savedSelections = {}
+  for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
+    savedSelections[index] = group.mainActiveSkillCalcs
+  end
+
+  local result = {}
+  for groupIndex, group in ipairs(build.skillsTab.socketGroupList or {}) do
+    local skillList = group.displaySkillListCalcs
+    if skillList and #skillList > 0 then
+      build.mainSocketGroup = groupIndex
+      calcsTab.input.skill_number = groupIndex
+      for skillIndex, activeSkill in ipairs(skillList) do
+        local grantedEffect = activeSkill.activeEffect and activeSkill.activeEffect.grantedEffect
+        if grantedEffect then
+          group.mainActiveSkillCalcs = skillIndex
+          build.buildFlag = true
+          build.modFlag = true
+          runCallback("OnFrame")
+          local output = calcsTab.mainOutput or {}
+          local totalDPS = output.TotalDPS or 0
+          local averageDamage = output.AverageDamage or 0
+          local combinedDPS = output.CombinedDPS or totalDPS
+          local fullDPS = output.FullDPS or combinedDPS
+          local speed = output.Speed
+          local totalDot = output.TotalDot or 0
+          if totalDPS ~= 0 or averageDamage ~= 0 or totalDot ~= 0 then
+            table.insert(result, {
+              name = grantedEffect.name or activeSkill.nameSpec or "Unknown Skill",
+              group = groupIndex,
+              skillIndex = skillIndex,
+              fullDPS = fullDPS,
+              combinedDPS = combinedDPS,
+              hitDPS = totalDPS,
+              averageDamage = averageDamage,
+              speed = speed,
+              dotDPS = totalDot,
+            })
+          end
+        end
+      end
+    end
+  end
+
+  build.mainSocketGroup = savedMainSocketGroup
+  calcsTab.input.skill_number = savedSkillNumber
+  for index, group in ipairs(build.skillsTab.socketGroupList or {}) do
+    group.mainActiveSkillCalcs = savedSelections[index]
+  end
+  build.buildFlag = true
+  build.modFlag = true
+  runCallback("OnFrame")
+  return result
 end
 
 local function statDelta(base, changed)
@@ -64,16 +128,17 @@ local function dispatch(request)
     assert(type(request.params) == "table", "params is required")
     assert(type(request.params.xml) == "string", "params.xml is required")
     loadBuildFromXML(request.params.xml, request.params.name or "Overlay Build")
-    return stats()
+    runCallback("OnFrame")
+    return { stats=stats(), skills=skillStats() }
   elseif request.method == "compareItem" then
     assert(type(request.params) == "table", "params is required")
     return compareItem(request.params.itemText)
   elseif request.method == "getStats" then
     runCallback("OnFrame")
-    return stats()
+    return { stats=stats(), skills=skillStats() }
   elseif request.method == "resetBuild" then
     newBuild()
-    return stats()
+    return { stats=stats(), skills={} }
   end
   error("Unknown method: " .. tostring(request.method))
 end
